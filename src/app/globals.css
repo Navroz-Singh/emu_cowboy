@@ -1,26 +1,150 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --cabinet-tan: #e2ba8c;
+  --screen-bg: #f4dfb8;
+  --border-brown: #4a2e15;
+  --accent-gold: #f3a726;
+  --title-red: #c94a38;
+  --border-inner: #f9f0dc;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--screen-bg);
+  --color-foreground: var(--border-brown);
+  --font-sans: var(--font-pixel);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--cabinet-tan);
+  color: var(--border-brown);
+  font-family: var(--font-pixel), sans-serif;
+  margin: 0;
+  min-height: 100vh;
 }
+
+.arcade-border {
+  border: 3px solid var(--border-brown);
+  box-shadow: inset 0 0 0 2px var(--border-inner);
+  border-radius: 8px;
+}
+
+.cabinet-lines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(74, 46, 21, 0.12) 0px,
+    rgba(74, 46, 21, 0.12) 2px,
+    transparent 2px,
+    transparent 18px
+  );
+}
+
+.saloon-title {
+  font-family: var(--font-saloon), serif;
+}
+
+.glow-gold {
+  box-shadow: 0 0 12px 4px var(--accent-gold);
+}
+
+.pixel-button {
+  border: 3px solid var(--border-brown);
+  border-radius: 10px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  background: linear-gradient(180deg, #f9c146 0%, var(--accent-gold) 100%);
+}
+
+@keyframes tumble-roll {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0.3;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(130px) rotate(360deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes dust-drift {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.45;
+  }
+  80% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(-12px) translateX(6px);
+    opacity: 0;
+  }
+}
+
+@keyframes blink-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.tumbleweed {
+  border: 2px dashed color-mix(in srgb, var(--border-brown) 65%, transparent);
+  border-radius: 9999px;
+  animation: tumble-roll 8s linear infinite;
+}
+
+.dust-mote {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--border-brown) 45%, transparent);
+  animation: dust-drift 2.3s ease-in-out infinite;
+}
+
+.loading-blink {
+  animation: blink-soft 1s ease-in-out infinite;
+}
+
+/* Custom scrollbar styling to match cabinet aesthetics */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-brown) var(--screen-bg);
+}
+
+/* Webkit-based browsers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--screen-bg) 85%, transparent);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--border-brown) 85%, #000 15%), var(--border-brown));
+  border-radius: 8px;
+  border: 2px solid var(--border-inner);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  filter: brightness(0.9);
+}
+
+/* Narrow scrollable lists inside arcade panels */
+.arcade-border ::-webkit-scrollbar {
+  width: 8px;
+}
+
+

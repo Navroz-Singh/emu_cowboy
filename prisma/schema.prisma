@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  sessions           Session[]
+  accounts           Account[]
+  scores             ScoreLog[]
+  leaderboardEntries LeaderboardEntry[]
+  gameSaves          GameSave[]
+  stats              UserStat?
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model ScoreLog {
+  id          String   @id @default(cuid())
+  userId      String
+  gameId      String
+  value       Int
+  countryCode String   @db.Char(2)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, gameId, createdAt(sort: Desc)])
+  @@index([gameId, createdAt(sort: Desc)])
+  @@map("score_log")
+}
+
+model LeaderboardEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  gameId      String
+  value       Int
+  countryCode String   @db.Char(2)
+  achievedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([gameId, value(sort: Desc)])
+  @@index([gameId, countryCode, value(sort: Desc)])
+  @@map("leaderboard_entry")
+}
+
+model UserStat {
+  userId          String   @id
+  totalScore      BigInt   @default(0)
+  gamesPlayed     Int      @default(0)
+  totalTimePlayed Int      @default(0)
+  lastPlayedGame  String?
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stat")
+}
+
+model GameSave {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String
+  state     Json
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@map("game_save")
+}

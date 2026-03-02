@@ -9,15 +9,22 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "^7.4.2",
+    "better-auth": "^1.4.20",
     "next": "16.1.6",
+    "pg": "^8.19.0",
+    "phaser": "^3.90.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "prisma": "^7.4.2",
     "tailwindcss": "^4"
   }
 }

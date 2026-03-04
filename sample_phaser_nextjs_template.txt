@@ -1,0 +1,578 @@
+├── src
+│   ├── game
+│   │   ├── scenes
+│   │   │   ├── Boot.js
+│   │   │   ├── Game.js
+│   │   │   ├── GameOver.js
+│   │   │   ├── MainMenu.js
+│   │   │   └── Preloader.js
+│   │   ├── EventBus.js
+│   │   └── main.js
+│   ├── app
+│   │   ├── layout.jsx
+│   │   └── page.jsx
+│   ├── styles
+│   │   ├── globals.css
+│   │   └── Home.module.css
+│   ├── App.jsx
+│   └── PhaserGame.jsx
+├── .editorconfig
+├── .eslintrc.json
+├── .gitignore
+├── conextract.py
+├── generate-tree.js
+├── LICENSE
+├── log.js
+├── next.config.mjs
+├── package-lock.json
+├── package.json
+├── README.md
+├── screenshot.png
+└── jsconfig.json
+code
+JavaScript
+// FILE: /src/game/scenes/Boot.js
+import { Scene } from 'phaser';
+
+export class Boot extends Scene
+{
+    constructor ()
+    {
+        super('Boot');
+    }
+
+    preload ()
+    {
+        //  The Boot Scene is typically used to load in any assets you require for your Preloader, such as a game logo or background.
+        //  The smaller the file size of the assets, the better, as the Boot Scene itself has no preloader.
+
+        this.load.image('background', 'assets/bg.png');
+    }
+
+    create ()
+    {
+        this.scene.start('Preloader');
+    }
+}
+code
+JavaScript
+// FILE: /src/game/scenes/Game.js
+import { EventBus } from '../EventBus';
+import { Scene } from 'phaser';
+
+export class Game extends Scene
+{
+    constructor ()
+    {
+        super('Game');
+    }
+
+    create ()
+    {
+        this.camera = this.cameras.main;
+        this.camera.setBackgroundColor(0x00ff00);
+
+        this.background = this.add.image(512, 384, 'background');
+        this.background.setAlpha(0.5);
+
+        this.gameText = this.add.text(512, 384, 'Make something fun!\nand share it with us:\nsupport@phaser.io', {
+            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
+            stroke: '#000000', strokeThickness: 8,
+            align: 'center'
+        }).setOrigin(0.5).setDepth(100);
+
+        EventBus.emit('current-scene-ready', this);
+    }
+
+    changeScene ()
+    {
+        this.scene.start('GameOver');
+    }
+}
+code
+JavaScript
+// FILE: /src/game/scenes/GameOver.js
+import { EventBus } from '../EventBus';
+import { Scene } from 'phaser';
+
+export class GameOver extends Scene
+{
+    constructor ()
+    {
+        super('GameOver');
+    }
+
+    create ()
+    {
+        this.camera = this.cameras.main
+        this.camera.setBackgroundColor(0xff0000);
+
+        this.background = this.add.image(512, 384, 'background');
+        this.background.setAlpha(0.5);
+
+        this.gameOverText = this.add.text(512, 384, 'Game Over', {
+            fontFamily: 'Arial Black', fontSize: 64, color: '#ffffff',
+            stroke: '#000000', strokeThickness: 8,
+            align: 'center'
+        }).setOrigin(0.5).setDepth(100);
+        
+        EventBus.emit('current-scene-ready', this);
+    }
+
+    changeScene ()
+    {
+        this.scene.start('MainMenu');
+    }
+}
+code
+JavaScript
+// FILE: /src/game/scenes/MainMenu.js
+import { Scene } from 'phaser';
+import { EventBus } from '../EventBus';
+
+export class MainMenu extends Scene
+{
+    constructor ()
+    {
+        super('MainMenu');
+    }
+
+    create ()
+    {
+        this.background = this.add.image(512, 384, 'background');
+
+        this.logo = this.add.image(512, 300, 'logo').setDepth(100);
+
+        this.title = this.add.text(512, 460, 'Main Menu', {
+            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
+            stroke: '#000000', strokeThickness: 8,
+            align: 'center'
+        }).setOrigin(0.5).setDepth(100);
+
+        EventBus.emit('current-scene-ready', this);
+    }
+    
+    changeScene ()
+    {
+        if (this.logoTween)
+        {
+            this.logoTween.stop();
+            this.logoTween = null;
+        }
+
+        this.scene.start('Game');
+    }
+
+    moveLogo (reactCallback)
+    {
+        if (this.logoTween)
+        {
+            if (this.logoTween.isPlaying())
+            {
+                this.logoTween.pause();
+            }
+            else
+            {
+                this.logoTween.play();
+            }
+        } 
+        else
+        {
+            this.logoTween = this.tweens.add({
+                targets: this.logo,
+                x: { value: 750, duration: 3000, ease: 'Back.easeInOut' },
+                y: { value: 80, duration: 1500, ease: 'Sine.easeOut' },
+                yoyo: true,
+                repeat: -1,
+                onUpdate: () => {
+                    if (reactCallback)
+                    {
+                        reactCallback({
+                            x: Math.floor(this.logo.x),
+                            y: Math.floor(this.logo.y)
+                        });
+                    }
+                }
+            });
+        }
+    }
+}
+code
+JavaScript
+// FILE: /src/game/scenes/Preloader.js
+import { Scene } from 'phaser';
+
+export class Preloader extends Scene
+{
+    constructor ()
+    {
+        super('Preloader');
+    }
+
+    init ()
+    {
+        //  We loaded this image in our Boot Scene, so we can display it here
+        this.add.image(512, 384, 'background');
+
+        //  A simple progress bar. This is the outline of the bar.
+        this.add.rectangle(512, 384, 468, 32).setStrokeStyle(1, 0xffffff);
+
+        //  This is the progress bar itself. It will increase in size from the left based on the % of progress.
+        const bar = this.add.rectangle(512-230, 384, 4, 28, 0xffffff);
+
+        //  Use the 'progress' event emitted by the LoaderPlugin to update the loading bar
+        this.load.on('progress', (progress) => {
+
+            //  Update the progress bar (our bar is 464px wide, so 100% = 464px)
+            bar.width = 4 + (460 * progress);
+
+        });
+    }
+
+    preload ()
+    {
+        //  Load the assets for the game - Replace with your own assets
+        this.load.setPath('assets');
+
+        this.load.image('logo', 'logo.png');
+        this.load.image('star', 'star.png');
+    }
+
+    create ()
+    {
+        //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
+        //  For example, you can define global animations here, so we can use them in other scenes.
+
+        //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
+        this.scene.start('MainMenu');
+    }
+}
+code
+JavaScript
+// FILE: /src/game/EventBus.js
+import { Events } from 'phaser';
+
+// Used to emit events between components, HTML and Phaser scenes
+export const EventBus = new Events.EventEmitter();
+code
+JavaScript
+// FILE: /src/game/main.js
+import { Boot } from './scenes/Boot';
+import { GameOver } from './scenes/GameOver';
+import { Game as MainGame } from './scenes/Game';
+import { MainMenu } from './scenes/MainMenu';
+import { AUTO, Game } from 'phaser';
+import { Preloader } from './scenes/Preloader';
+
+//  Find out more information about the Game Config at:
+//  https://newdocs.phaser.io/docs/3.70.0/Phaser.Types.Core.GameConfig
+const config = {
+    type: AUTO,
+    width: 1024,
+    height: 768,
+    parent: 'game-container',
+    backgroundColor: '#028af8',
+    scene:[
+        Boot,
+        Preloader,
+        MainMenu,
+        MainGame,
+        GameOver
+    ]
+};
+
+const StartGame = (parent) => {
+
+    return new Game({ ...config, parent });
+
+}
+
+export default StartGame;
+code
+Jsx
+// FILE: /src/app/layout.jsx
+import { Inter } from "next/font/google";
+import "@/styles/globals.css";
+
+const inter = Inter({ subsets:["latin"] });
+
+export const metadata = {
+    title: "Phaser Nextjs Template",
+    description: "A Phaser 3 Next.js project template that demonstrates Next.js with React communication and uses Vite for bundling.",
+    icons: {
+        icon: "/favicon.png",
+    },
+};
+
+export const viewport = {
+    width: "device-width",
+    initialScale: 1,
+};
+
+export default function RootLayout({ children }) {
+    return (
+        <html lang="en">
+            <body className={inter.className}>
+                {children}
+            </body>
+        </html>
+    );
+}
+code
+Jsx
+// FILE: /src/app/page.jsx
+import styles from "@/styles/Home.module.css";
+import dynamic from "next/dynamic";
+
+const AppWithoutSSR = dynamic(() => import("@/App"), { ssr: false });
+
+export default function Home() {
+    return (
+        <main className={styles.main}>
+            <AppWithoutSSR />
+        </main>
+    );
+}
+code
+CSS
+/* FILE: /src/styles/globals.css */
+body {
+    margin: 0;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #000000; 
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#app {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.spritePosition {
+    margin: 10px 0 0 10px;
+    font-size: 0.8em;
+}
+
+.button {
+    width: 140px;
+    margin: 10px;
+    padding: 10px;
+    background-color: #000000;
+    color: rgba(255, 255, 255, 0.87);
+    border: 1px solid rgba(255, 255, 255, 0.87);
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+        border: 1px solid #0ec3c9;
+        color: #0ec3c9;
+    }
+
+    &:active {
+        background-color: #0ec3c9;
+    }
+
+    /* Disabled styles */
+    &:disabled {
+        cursor: not-allowed;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: rgba(255, 255, 255, 0.3);
+    }
+}
+code
+CSS
+/* FILE: /src/styles/Home.module.css */
+code
+Jsx
+// FILE: /src/App.jsx
+"use client";
+
+import { useRef, useState } from 'react';
+import Phaser from 'phaser';
+import { PhaserGame } from './PhaserGame';
+
+function App()
+{
+    // The sprite can only be moved in the MainMenu Scene
+    const [canMoveSprite, setCanMoveSprite] = useState(true);
+
+    //  References to the PhaserGame component (game and scene are exposed)
+    const phaserRef = useRef(null);
+    const [spritePosition, setSpritePosition] = useState({ x: 0, y: 0 });
+
+    const changeScene = () => {
+
+        if(phaserRef.current)
+        {     
+            const scene = phaserRef.current.scene;
+            
+            if (scene)
+            {
+                scene.changeScene();
+            }
+        }
+    }
+
+    const moveSprite = () => {
+
+        if(phaserRef.current)
+        {
+
+            const scene = phaserRef.current.scene;
+
+            if (scene && scene.scene.key === 'MainMenu')
+            {
+                // Get the update logo position
+                scene.moveLogo(({ x, y }) => {
+
+                    setSpritePosition({ x, y });
+
+                });
+            }
+        }
+
+    }
+
+    const addSprite = () => {
+
+        if (phaserRef.current)
+        {
+            const scene = phaserRef.current.scene;
+
+            if (scene)
+            {
+                // Add more stars
+                const x = Phaser.Math.Between(64, scene.scale.width - 64);
+                const y = Phaser.Math.Between(64, scene.scale.height - 64);
+    
+                //  `add.sprite` is a Phaser GameObjectFactory method and it returns a Sprite Game Object instance
+                const star = scene.add.sprite(x, y, 'star');
+    
+                //  ... which you can then act upon. Here we create a Phaser Tween to fade the star sprite in and out.
+                //  You could, of course, do this from within the Phaser Scene code, but this is just an example
+                //  showing that Phaser objects and systems can be acted upon from outside of Phaser itself.
+                scene.add.tween({
+                    targets: star,
+                    duration: 500 + Math.random() * 1000,
+                    alpha: 0,
+                    yoyo: true,
+                    repeat: -1
+                });
+            }
+        }
+    }
+
+    // Event emitted from the PhaserGame component
+    const currentScene = (scene) => {
+
+        setCanMoveSprite(scene.scene.key !== 'MainMenu');
+        
+    }
+
+    return (
+        <div id="app">
+            <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
+            <div>
+                <div>
+                    <button className="button" onClick={changeScene}>Change Scene</button>
+                </div>
+                <div>
+                    <button disabled={canMoveSprite} className="button" onClick={moveSprite}>Toggle Movement</button>
+                </div>
+                <div className="spritePosition">Sprite Position:
+                    <pre>{`{\n  x: ${spritePosition.x}\n  y: ${spritePosition.y}\n}`}</pre>
+                </div>
+                <div>
+                    <button className="button" onClick={addSprite}>Add New Sprite</button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default App;
+code
+Jsx
+// FILE: /src/PhaserGame.jsx
+"use client";
+
+import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react';
+import StartGame from './game/main';
+import { EventBus } from './game/EventBus';
+
+export const PhaserGame = forwardRef(function PhaserGame({ currentActiveScene }, ref)
+{
+    const game = useRef(null);
+
+    useLayoutEffect(() =>
+    {
+        if (game.current === null)
+        {
+
+            game.current = StartGame("game-container");
+
+            if (typeof ref === 'function')
+            {
+                ref({ game: game.current, scene: null });
+            } else if (ref)
+            {
+                ref.current = { game: game.current, scene: null };
+            }
+
+        }
+
+        return () =>
+        {
+            if (game.current)
+            {
+                game.current.destroy(true);
+                if (game.current !== null)
+                {
+                    game.current = null;
+                }
+            }
+        }
+    }, [ref]);
+
+    useEffect(() =>
+    {
+        EventBus.on('current-scene-ready', (scene_instance) =>
+        {
+            if (currentActiveScene && typeof currentActiveScene === 'function')
+            {
+
+                currentActiveScene(scene_instance);
+
+            }
+
+            if (typeof ref === 'function')
+            {
+
+                ref({ game: game.current, scene: scene_instance });
+            
+            } else if (ref)
+            {
+
+                ref.current = { game: game.current, scene: scene_instance };
+
+            }
+            
+        });
+        return () =>
+        {
+
+            EventBus.removeListener('current-scene-ready');
+        
+        }
+    }, [currentActiveScene, ref]);
+
+    return (
+        <div id="game-container"></div>
+    );
+
+});

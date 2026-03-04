@@ -47,7 +47,11 @@ export async function POST(request, { params }) {
   }
 
   const body = await request.json();
-  const state = body?.state ?? {};
+  const state = body?.state;
+
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    return Response.json({ error: "Invalid state payload" }, { status: 400 });
+  }
 
   const save = await prisma.gameSave.upsert({
     where: {
@@ -68,10 +72,6 @@ export async function POST(request, { params }) {
 
   return Response.json({
     success: true,
-    gameSave: {
-      id: save.id,
-      gameId: save.gameId,
-      updatedAt: save.updatedAt,
-    },
+    updatedAt: save.updatedAt,
   });
 }

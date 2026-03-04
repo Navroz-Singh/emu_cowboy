@@ -5,22 +5,21 @@ export const useEmulatorStore = create((set, get) => ({
   score: 0,
   highScore: 0,
   ammoCount: 6,
-  isGameOverVisible: false,
 
   togglePause: () => {
-    const next = !get().isPaused;
-    set({ isPaused: next });
-    return next;
+    const nextPaused = !get().isPaused;
+    set({ isPaused: nextPaused });
+    return nextPaused;
   },
   setPaused: (isPaused) => set({ isPaused: Boolean(isPaused) }),
-  setScore: (score) => {
-    const normalized = Number.isFinite(Number(score)) ? Math.max(0, Math.trunc(Number(score))) : 0;
-    set((state) => ({ score: normalized, highScore: Math.max(normalized, state.highScore) }));
+  setScore: (value) => {
+    const nextScore = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    const currentHigh = get().highScore;
+    set({ score: nextScore, highScore: Math.max(nextScore, currentHigh) });
   },
-  setAmmo: (ammoCount) => {
-    const normalized = Number.isFinite(Number(ammoCount)) ? Math.max(0, Math.trunc(Number(ammoCount))) : 0;
-    set({ ammoCount: normalized });
+  setAmmo: (value) => {
+    const nextAmmo = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    set({ ammoCount: nextAmmo });
   },
-  setGameOverVisible: (isGameOverVisible) => set({ isGameOverVisible: Boolean(isGameOverVisible) }),
-  reset: () => set({ isPaused: false, score: 0, ammoCount: 6, isGameOverVisible: false }),
+  reset: () => set({ isPaused: false, score: 0, ammoCount: 6 }),
 }));

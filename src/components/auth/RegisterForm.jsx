@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { useDebounce } from "@/hooks/useDebounce";
 import { authClient } from "@/lib/auth-client";
 import { migrateLocalDataToServer } from "@/lib/persistence";
 import { useArcadeStore } from "@/store/arcadeStore";
@@ -21,8 +22,26 @@ export default function RegisterForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const debouncedName = useDebounce(name, 300);
+  const debouncedEmail = useDebounce(email, 300);
+  const debouncedPassword = useDebounce(password, 300);
+
+  const validationError = useMemo(() => {
+    if (!debouncedName && !debouncedEmail && !debouncedPassword) return "";
+    if (debouncedName.trim().length < 2) return "Username must be at least 2 characters.";
+    if (!/^\S+@\S+\.\S+$/.test(debouncedEmail)) return "Enter a valid email address.";
+    if (debouncedPassword.length < 8) return "Password must be at least 8 characters.";
+    return "";
+  }, [debouncedEmail, debouncedName, debouncedPassword]);
+
+  const canSubmit = useMemo(
+    () => Boolean(name && email && password) && !validationError && !isSubmitting,
+    [name, email, password, validationError, isSubmitting],
+  );
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!canSubmit) return;
     setErrorMessage("");
     setIsSubmitting(true);
 
@@ -54,7 +73,7 @@ export default function RegisterForm() {
       <div className="space-y-1">
         <label className="text-[10px] md:text-xs" htmlFor="register-name">USERNAME</label>
         <input
-          className="arcade-border w-full bg-[var(--screen-bg)] px-2 py-2 text-[10px] md:text-xs"
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
           id="register-name"
           onChange={(event) => setName(event.target.value)}
           required
@@ -66,7 +85,7 @@ export default function RegisterForm() {
       <div className="space-y-1">
         <label className="text-[10px] md:text-xs" htmlFor="register-email">EMAIL</label>
         <input
-          className="arcade-border w-full bg-[var(--screen-bg)] px-2 py-2 text-[10px] md:text-xs"
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
           id="register-email"
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -78,7 +97,7 @@ export default function RegisterForm() {
       <div className="space-y-1">
         <label className="text-[10px] md:text-xs" htmlFor="register-password">PASSWORD</label>
         <input
-          className="arcade-border w-full bg-[var(--screen-bg)] px-2 py-2 text-[10px] md:text-xs"
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
           id="register-password"
           minLength={8}
           onChange={(event) => setPassword(event.target.value)}
@@ -112,21 +131,22 @@ export default function RegisterForm() {
         </div>
       </div>
 
-      {errorMessage ? <p className="text-[9px] text-[var(--title-red)] md:text-[10px]">{errorMessage}</p> : null}
+      {validationError ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{validationError}</p> : null}
+      {errorMessage ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{errorMessage}</p> : null}
 
       <button
         className={[
           "pixel-button w-full px-3 py-2 text-[10px] md:text-xs",
           isSubmitting ? "loading-blink" : "",
         ].join(" ")}
-        disabled={isSubmitting}
+        disabled={!canSubmit}
         type="submit"
       >
         {isSubmitting ? "CREATING ACCOUNT..." : "REGISTER"}
       </button>
 
       <button
-        className="w-full text-[9px] text-[var(--border-brown)]/80 underline md:text-[10px]"
+        className="w-full text-[9px] text-(--border-brown)/80 underline md:text-[10px]"
         disabled={isSubmitting}
         onClick={() => setAuthMode("login")}
         type="button"

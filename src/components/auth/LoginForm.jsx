@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { useDebounce } from "@/hooks/useDebounce";
 import { authClient } from "@/lib/auth-client";
 import { migrateLocalDataToServer } from "@/lib/persistence";
 import { useArcadeStore } from "@/store/arcadeStore";
@@ -17,8 +18,24 @@ export default function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const debouncedEmail = useDebounce(email, 300);
+  const debouncedPassword = useDebounce(password, 300);
+
+  const validationError = useMemo(() => {
+    if (!debouncedEmail && !debouncedPassword) return "";
+    if (!/^\S+@\S+\.\S+$/.test(debouncedEmail)) return "Enter a valid email address.";
+    if (debouncedPassword.length < 8) return "Password must be at least 8 characters.";
+    return "";
+  }, [debouncedEmail, debouncedPassword]);
+
+  const canSubmit = useMemo(
+    () => Boolean(email && password) && !validationError && !isSubmitting,
+    [email, password, validationError, isSubmitting],
+  );
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!canSubmit) return;
     setErrorMessage("");
     setIsSubmitting(true);
 
@@ -48,7 +65,7 @@ export default function LoginForm() {
       <div className="space-y-1">
         <label className="text-[10px] md:text-xs" htmlFor="email">EMAIL</label>
         <input
-          className="arcade-border w-full bg-[var(--screen-bg)] px-2 py-2 text-[10px] md:text-xs"
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
           id="email"
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -60,7 +77,7 @@ export default function LoginForm() {
       <div className="space-y-1">
         <label className="text-[10px] md:text-xs" htmlFor="password">PASSWORD</label>
         <input
-          className="arcade-border w-full bg-[var(--screen-bg)] px-2 py-2 text-[10px] md:text-xs"
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
           id="password"
           minLength={8}
           onChange={(event) => setPassword(event.target.value)}
@@ -70,21 +87,22 @@ export default function LoginForm() {
         />
       </div>
 
-      {errorMessage ? <p className="text-[9px] text-[var(--title-red)] md:text-[10px]">{errorMessage}</p> : null}
+      {validationError ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{validationError}</p> : null}
+      {errorMessage ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{errorMessage}</p> : null}
 
       <button
         className={[
           "pixel-button w-full px-3 py-2 text-[10px] md:text-xs",
           isSubmitting ? "loading-blink" : "",
         ].join(" ")}
-        disabled={isSubmitting}
+        disabled={!canSubmit}
         type="submit"
       >
         {isSubmitting ? "SIGNING IN..." : "SIGN IN"}
       </button>
 
       <button
-        className="w-full text-[9px] text-[var(--border-brown)]/80 underline md:text-[10px]"
+        className="w-full text-[9px] text-(--border-brown)/80 underline md:text-[10px]"
         disabled={isSubmitting}
         onClick={() => setAuthMode("register")}
         type="button"

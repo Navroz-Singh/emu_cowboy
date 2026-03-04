@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { GAME_REGISTRY } from "@/games/registry";
 import { useArcadeStore } from "@/store/arcadeStore";
 import { GAMES } from "@/utils/constants";
 
@@ -11,29 +12,49 @@ export default function AllGamesView() {
   const router = useRouter();
   const selectedGameId = useArcadeStore((state) => state.selectedGameId);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [launchMilestoneIndex, setLaunchMilestoneIndex] = useState(0);
+  const milestoneTimeoutsRef = useRef([]);
+
+  const launchMilestones = ["PREPARING CARTRIDGE...", "LOADING ASSETS...", "BOOTING..."];
+
+  useEffect(() => {
+    return () => {
+      milestoneTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      milestoneTimeoutsRef.current = [];
+    };
+  }, []);
 
   const selectedGame = useMemo(
     () => GAMES.find((game) => game.id === selectedGameId) ?? GAMES[0],
     [selectedGameId],
   );
 
-  const handleLaunch = () => {
-    if (isLaunching) return;
-    setIsLaunching(true);
+  const registryGame = useMemo(() => GAME_REGISTRY[selectedGameId] ?? null, [selectedGameId]);
 
-    window.setTimeout(() => {
-      setIsLaunching(false);
-      router.push(`/play/${selectedGameId}`);
-    }, 700);
+  const handleLaunchPrep = () => {
+    if (isLaunching) return;
+
+    setIsLaunching(true);
+    setLaunchMilestoneIndex(0);
+
+    milestoneTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    milestoneTimeoutsRef.current = [];
+
+    milestoneTimeoutsRef.current.push(
+      window.setTimeout(() => setLaunchMilestoneIndex(1), 350),
+      window.setTimeout(() => setLaunchMilestoneIndex(2), 900),
+    );
+
+    router.push(`/play/${selectedGameId}`);
   };
 
   return (
     <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[45%_55%]">
-      <div className="arcade-border bg-[var(--cabinet-tan)]/40 p-3">
-        <div className="relative mx-auto aspect-square w-full max-w-[420px]">
+      <div className="arcade-border bg-(--cabinet-tan)/40 p-3">
+        <div className="relative mx-auto aspect-square w-full max-w-105">
           <Image
-            alt={selectedGame.title}
-            className="rounded-md border-2 border-[var(--border-brown)]/50 object-cover"
+            alt={registryGame?.title || selectedGame.title}
+            className="rounded-md border-2 border-(--border-brown)/50 object-cover"
             fill
             src={selectedGame.src}
           />
@@ -41,20 +62,24 @@ export default function AllGamesView() {
       </div>
 
       <div className="flex h-full flex-col gap-3">
-        <h2 className="saloon-title text-3xl text-[var(--title-red)] md:text-5xl">{selectedGame.title.toUpperCase()}</h2>
-        <p className="text-[10px] leading-6 md:text-xs">{selectedGame.shortDescription}</p>
+        <h2 className="saloon-title text-3xl text-(--title-red) md:text-5xl">
+          {(registryGame?.title || selectedGame.title).toUpperCase()}
+        </h2>
+        <p className="text-[10px] leading-6 md:text-xs">
+          {registryGame?.description || selectedGame.shortDescription}
+        </p>
         <button
           className={[
             "pixel-button w-full px-4 py-4 text-xs",
             isLaunching ? "loading-blink" : "",
           ].join(" ")}
           disabled={isLaunching}
-          onClick={handleLaunch}
+          onClick={handleLaunchPrep}
           type="button"
         >
-          {isLaunching ? "LOADING GAME..." : "START / INSERT COIN"}
+          {isLaunching ? launchMilestones[launchMilestoneIndex] : "START / INSERT COIN"}
         </button>
-        <div className="arcade-border mt-auto bg-[var(--cabinet-tan)]/40 p-3 text-[10px] md:text-xs">
+        <div className="arcade-border mt-auto bg-(--cabinet-tan)/40 p-3 text-[10px] md:text-xs">
           <p className="mb-2">GLOBAL LEADERS</p>
           <div className="space-y-1">
             <div className="flex justify-between"><span>1. DESERTKING</span><span>12,900</span></div>

@@ -1,0 +1,327 @@
+import * as Phaser from "phaser";
+
+import { EVENTS, EventBus } from "@/lib/eventBus";
+import { ACTION_STATE } from "@/games/dustbowl-dash/constants/GameConstants";
+
+export class PlayerController {
+  constructor(scene, obstacleManager) {
+    this.scene = scene;
+    this.obstacleManager = obstacleManager;
+    this.scene.isJumpInProgress = false;
+  }
+
+  initKeyboard() {
+    if (!this.scene.input?.keyboard) return;
+
+    this.scene.cursors = this.scene.input.keyboard.createCursorKeys();
+    this.scene.keys = this.scene.input.keyboard.addKeys({
+      leftA: Phaser.Input.Keyboard.KeyCodes.A,
+      rightD: Phaser.Input.Keyboard.KeyCodes.D,
+      jumpSpace: Phaser.Input.Keyboard.KeyCodes.SPACE,
+      lassoE: Phaser.Input.Keyboard.KeyCodes.E,
+      shootF: Phaser.Input.Keyboard.KeyCodes.F,
+    });
+  }
+
+  processInput() {
+    if (this.scene.isGameOver || !this.scene.keys || !this.scene.cursors) return;
+
+    if (Phaser.Input.Keyboard.JustDown(this.scene.keys.leftA) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.left)) {
+      this.handleLaneSwitchInput(-1);
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.scene.keys.rightD) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.right)) {
+      this.handleLaneSwitchInput(1);
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.scene.keys.jumpSpace) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.up)) {
+      if (this.scene.actionState === ACTION_STATE.IDLE) {
+        this.jump();
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.scene.keys.shootF)) {
+      if (this.scene.actionState === ACTION_STATE.IDLE) {
+        this.quickDraw();
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.scene.keys.lassoE)) {
+      if (this.scene.actionState === ACTION_STATE.IDLE) {
+        this.throwLasso();
+      }
+    }
+  }
+
+  handleLaneSwitchInput(direction) {
+    if (this.scene.actionState === ACTION_STATE.IDLE || this.scene.actionState === ACTION_STATE.JUMPING) {
+      this.switchLane(direction);
+      return;
+    }
+
+    if (this.scene.actionState === ACTION_STATE.SWITCHING) {
+      this.scene.inputBuffer = direction;
+      this.scene.time.delayedCall(this.scene.constants.INPUT_BUFFER_WINDOW, () => {
+        if (this.scene.actionState === ACTION_STATE.SWITCHING) {
+          this.scene.inputBuffer = null;
+        }
+      });
+    }
+  }
+
+  switchLane(direction) {
+    const newLane = this.scene.currentLane + direction;
+    if (newLane < 0 || newLane > 2 || !this.scene.cowboy) return;
+
+    const preserveJumpState = this.scene.actionState === ACTION_STATE.JUMPING || this.scene.isJumpInProgress;
+    this.scene.actionState = ACTION_STATE.SWITCHING;
+    const switchDuration = this.scene.constants.SWITCH_DURATION;
+
+    this.scene.tweens.add({
+      targets: this.scene.cowboy,
+      x: this.scene.lanes[newLane],
+      duration: switchDuration,
+      ease: "Sine.easeInOut",
+      onStart: () => {
+        this.scene.cowboy.angle = direction > 0 ? 20 : -20;
+      },
+      onComplete: () => {
+        this.scene.cowboy.angle = 0;
+        this.scene.cowboy.x = this.scene.lanes[newLane];
+        this.scene.currentLane = newLane;
+
+        if (this.scene.inputBuffer !== null) {
+          const bufferedDirection = this.scene.inputBuffer;
+          this.scene.inputBuffer = null;
+          this.switchLane(bufferedDirection);
+          return;
+        }
+
+        this.scene.actionState = preserveJumpState && this.scene.isJumpInProgress ? ACTION_STATE.JUMPING : ACTION_STATE.IDLE;
+      },
+    });
+
+    if (this.scene.shadow) {
+      this.scene.tweens.add({
+        targets: this.scene.shadow,
+        x: this.scene.lanes[newLane],
+        duration: switchDuration,
+        ease: "Sine.easeInOut",
+      });
+    }
+  }
+
+  jump() {
+    if (!this.scene.cowboy || this.scene.actionState !== ACTION_STATE.IDLE) return;
+
+    this.scene.isJumpInProgress = true;
+    this.scene.actionState = ACTION_STATE.JUMPING;
+
+    this.scene.tweens.add({
+      targets: this.scene.cowboy,
+      scaleX: this.scene.constants.BASE_SPRITE_SCALE * 1.15,
+      scaleY: this.scene.constants.BASE_SPRITE_SCALE * 1.15,
+      duration: this.scene.constants.JUMP_DURATION / 2,
+      yoyo: true,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        this.scene.isJumpInProgress = false;
+        if (this.scene.actionState !== ACTION_STATE.SWITCHING) {
+          this.scene.actionState = ACTION_STATE.IDLE;
+        }
+      },
+    });
+
+    if (this.scene.shadow) {
+      this.scene.tweens.add({
+        targets: this.scene.shadow,
+        scaleX: this.scene.constants.SHADOW_SCALE * 0.5,
+        scaleY: this.scene.constants.SHADOW_SCALE * 0.5,
+        alpha: 0.2,
+        y: this.scene.shadowBaseY - 8,
+        duration: this.scene.constants.JUMP_DURATION / 2,
+        yoyo: true,
+        ease: "Quad.easeOut",
+      });
+    }
+  }
+
+  quickDraw() {
+    if (!this.scene.cowboy || this.scene.actionState !== ACTION_STATE.IDLE) return;
+
+    if (this.scene.ammoCount <= 0) {
+      this.scene.cameras?.main?.shake(70, 0.004);
+      this.scene.tweens.add({
+        targets: this.scene.cowboy,
+        x: this.scene.cowboy.x + 2,
+        duration: 40,
+        yoyo: true,
+        repeat: 2,
+        onComplete: () => {
+          if (this.scene.cowboy) {
+            this.scene.cowboy.x = this.scene.lanes[this.scene.currentLane];
+          }
+        },
+      });
+      return;
+    }
+
+    this.scene.actionState = ACTION_STATE.SHOOTING;
+    this.scene.ammoCount -= 1;
+    this.scene.ammo = this.scene.ammoCount;
+
+    if (this.scene.textures.exists("cowboy-actions")) {
+      this.scene.cowboy.setTexture("cowboy-actions", 0);
+    }
+
+    const bullet = this.obstacleManager.bulletPool?.getFirstDead(false);
+    if (bullet) {
+      bullet.setPosition(this.scene.cowboy.x, this.scene.cowboy.y - 30);
+      bullet.setActive(true).setVisible(true);
+      if (bullet.body) {
+        bullet.body.enable = true;
+        bullet.body.setVelocity(0, -this.scene.constants.BULLET_SPEED);
+      }
+    }
+
+    if (this.scene.textures.exists("vfx")) {
+      const flash = this.scene.add.sprite(this.scene.cowboy.x, this.scene.cowboy.y - 20, "vfx", 4).setDepth(20);
+      this.scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 100,
+        onComplete: () => {
+          if (flash?.active) flash.destroy();
+        },
+      });
+    }
+
+    this.scene.cameras?.main?.shake(100, 0.01);
+
+    this.scene.time.delayedCall(this.scene.constants.SHOOT_DURATION, () => {
+      if (!this.scene.cowboy) return;
+      if (this.scene.textures.exists("cowboy-gallop")) {
+        this.scene.cowboy.setTexture("cowboy-gallop", 0);
+      }
+      if (this.scene.anims.exists("gallop")) {
+        this.scene.cowboy.play("gallop", true);
+      }
+      this.scene.actionState = ACTION_STATE.IDLE;
+    });
+  }
+
+  throwLasso() {
+    if (this.scene.actionState !== ACTION_STATE.IDLE || !this.scene.cowboy) return;
+
+    const rabbit = this.scene.spawnerSystem?.findNearestRabbit(this.scene.cowboy.x, this.scene.cowboy.y);
+    if (!rabbit) return;
+
+    this.scene.actionState = ACTION_STATE.LASSOING;
+
+    const originX = this.scene.cowboy.x;
+    this.scene.tweens.add({
+      targets: this.scene.cowboy,
+      x: originX + 2,
+      duration: 50,
+      yoyo: true,
+      repeat: 7,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (this.scene.cowboy) {
+          this.scene.cowboy.x = this.scene.lanes[this.scene.currentLane];
+        }
+      },
+    });
+
+    if (this.scene.textures.exists("cowboy-actions")) {
+      this.scene.cowboy.setTexture("cowboy-actions", 1);
+      this.scene.time.delayedCall(90, () => {
+        if (this.scene.cowboy && this.scene.textures.exists("cowboy-actions")) {
+          this.scene.cowboy.setTexture("cowboy-actions", 2);
+        }
+      });
+    }
+
+    if (!this.scene.textures.exists("vfx")) {
+      this.scene.time.delayedCall(this.scene.constants.LASSO_DURATION, () => {
+        if (!this.scene.cowboy) return;
+        if (this.scene.textures.exists("cowboy-gallop")) {
+          this.scene.cowboy.setTexture("cowboy-gallop", 0);
+        }
+        if (this.scene.anims.exists("gallop")) {
+          this.scene.cowboy.play("gallop", true);
+        }
+        this.scene.actionState = ACTION_STATE.IDLE;
+      });
+      return;
+    }
+
+    const lasso = this.scene.add.sprite(this.scene.cowboy.x, this.scene.cowboy.y, "vfx", 6).setDepth(22);
+    const startX = this.scene.cowboy.x;
+    const startY = this.scene.cowboy.y;
+    const targetX = rabbit.x;
+    const targetY = rabbit.y;
+    const midX = (startX + targetX) / 2;
+    const midY = Math.min(startY, targetY) - 60;
+
+    const arcState = { t: 0 };
+    this.scene.tweens.add({
+      targets: arcState,
+      t: 1,
+      duration: 260,
+      ease: "Linear",
+      onUpdate: () => {
+        const t = Phaser.Math.Clamp(arcState.t, 0, 1);
+        const inv = 1 - t;
+        lasso.x = inv * inv * startX + 2 * inv * t * midX + t * t * targetX;
+        lasso.y = inv * inv * startY + 2 * inv * t * midY + t * t * targetY;
+      },
+      onComplete: () => {
+        const caught = this.scene.spawnerSystem?.handleRabbitCaught(rabbit);
+
+        if (caught) {
+          EventBus.emit(EVENTS.SCORE_UPDATED, { score: this.scene.score, ammo: this.scene.ammoCount });
+
+          const savedSpeed = this.scene.gameSpeed;
+          this.scene.gameSpeed = Math.max(120, this.scene.gameSpeed * 0.3);
+          this.scene.time.delayedCall(500, () => {
+            if (!this.scene.hasDied && !this.scene.isGameOver) {
+              this.scene.gameSpeed = Math.max(savedSpeed, this.scene.gameSpeed);
+            }
+          });
+
+          this.scene.tweens.add({
+            targets: lasso,
+            x: this.scene.cowboy.x,
+            y: this.scene.cowboy.y,
+            duration: 300,
+            onComplete: () => {
+              if (lasso?.active) lasso.destroy();
+            },
+          });
+        } else {
+          this.scene.tweens.add({
+            targets: lasso,
+            x: this.scene.cowboy.x,
+            y: this.scene.cowboy.y,
+            duration: 200,
+            onComplete: () => {
+              if (lasso?.active) lasso.destroy();
+            },
+          });
+        }
+      },
+    });
+
+    this.scene.time.delayedCall(this.scene.constants.LASSO_DURATION, () => {
+      if (!this.scene.cowboy) return;
+      if (this.scene.textures.exists("cowboy-gallop")) {
+        this.scene.cowboy.setTexture("cowboy-gallop", 0);
+      }
+      if (this.scene.anims.exists("gallop")) {
+        this.scene.cowboy.play("gallop", true);
+      }
+      this.scene.actionState = ACTION_STATE.IDLE;
+    });
+  }
+}

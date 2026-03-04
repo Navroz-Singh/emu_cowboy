@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AUTO, Game, Scale } from "phaser";
+
+import { GAME_REGISTRY } from "@/games/registry";
 
 export default function GameWrapper({ gameId, width = 800, height = 600 }) {
   const containerRef = useRef(null);
@@ -12,24 +15,23 @@ export default function GameWrapper({ gameId, width = 800, height = 600 }) {
 
     async function initGame() {
       try {
-        const Phaser = await import("phaser");
-        const { GAME_REGISTRY } = await import("@/games/registry");
         const cartridge = GAME_REGISTRY[gameId];
 
-        if (!cartridge?.sceneImporter || !isMounted || !containerRef.current || gameRef.current) {
+        if (!cartridge?.sceneImporter || !isMounted || gameRef.current || !containerRef.current) {
           return;
         }
 
         const scenes = await cartridge.sceneImporter();
+        if (!isMounted) return;
 
         const config = {
-          type: Phaser.AUTO,
+          type: AUTO,
           parent: containerRef.current,
           width,
           height,
           scale: {
-            mode: Phaser.Scale.FIT,
-            autoCenter: Phaser.Scale.CENTER_BOTH,
+            mode: Scale.FIT,
+            autoCenter: Scale.CENTER_BOTH,
             width,
             height,
           },
@@ -37,7 +39,7 @@ export default function GameWrapper({ gameId, width = 800, height = 600 }) {
           scene: scenes,
         };
 
-        gameRef.current = new Phaser.Game(config);
+        gameRef.current = new Game(config);
       } catch {
         setError("Unable to initialize game cartridge.");
       }
@@ -56,9 +58,11 @@ export default function GameWrapper({ gameId, width = 800, height = 600 }) {
   }, [gameId, width, height]);
 
   return (
-    <div className="arcade-border flex h-full w-full items-center justify-center overflow-hidden bg-[var(--screen-bg)]/65">
+    <div className="arcade-border relative h-full w-full overflow-hidden bg-(--screen-bg)/65">
       {error ? (
-        <div className="arcade-border bg-[var(--cabinet-tan)] px-3 py-2 text-[10px] text-[var(--title-red)]">{error}</div>
+        <div className="arcade-border absolute left-3 top-3 z-10 bg-(--cabinet-tan) px-3 py-2 text-[10px] text-(--title-red)">
+          {error}
+        </div>
       ) : null}
       <div className="h-full w-full" ref={containerRef} />
     </div>

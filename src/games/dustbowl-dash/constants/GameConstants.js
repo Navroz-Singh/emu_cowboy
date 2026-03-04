@@ -1,0 +1,63 @@
+export const GAME_CONSTANTS = {
+  CANVAS_WIDTH: 800,
+  CANVAS_HEIGHT: 600,
+  LANE_CENTERS: [252, 400, 547],
+  TRACK_LINES: [180, 325, 474, 620],
+  SPAWN_Y: -100,
+  PLAYER_Y: 500,
+  DESPAWN_Y: 700,
+  SWITCH_DURATION: 150,
+  JUMP_DURATION: 600,
+  SHOOT_DURATION: 200,
+  LASSO_DURATION: 300,
+  INPUT_BUFFER_WINDOW: 200,
+  INITIAL_SPEED: 400,
+  MAX_SPEED: 950,
+  SURGE_INCREMENT: 75,
+  SURGE_CYCLE: 30000,
+  BULLET_SPEED: 1200,
+  SCORE_EMIT_INTERVAL: 500,
+  NEAR_MISS_THRESHOLD: 15,
+  LEAD_RECOVERY: 2,
+  RABBIT_CHECKPOINTS: [1000, 5000, 25000, 80000, 200000, 500000],
+  BASE_SPRITE_SCALE: 1.2,
+  CACTUS_SCALE: 1.0,
+  WAGON_SCALE: 1.5,
+  SIGN_SCALE: 1.5,
+  SHADOW_SCALE: 1.2,
+  TUMBLEWEED_BOB_AMPLITUDE: 6,
+};
+
+export const ACTION_STATE = {
+  IDLE: "IDLE",
+  SWITCHING: "SWITCHING",
+  JUMPING: "JUMPING",
+  SHOOTING: "SHOOTING",
+  LASSOING: "LASSOING",
+};
+
+export const OBSTACLE_TYPE = {
+  CACTUS: "cactus",
+  BARREL: "barrel",
+  SIGN: "sign",
+  TUMBLEWEED: "tumbleweed",
+  WAGON: "wagon",
+};
+
+export const PATTERN_TYPE = {
+  SOLO: "solo",
+  NEEDLE: "needle",
+  WALL: "wall",
+  INVERSE_WALL: "inverseWall",
+  HEAVY: "heavy",
+  SLALOM: "slalom",
+  STAIRS_LEFT: "stairsLeft",
+  STAIRS_RIGHT: "stairsRight",
+  CENTER_PRESS: "centerPress",
+  OUTER_PRESS: "outerPress",
+  ZIG_ZAG_LEFT: "zigZagLeft",
+  ZIG_ZAG_RIGHT: "zigZagRight",
+  DOUBLE_TAP_CENTER: "doubleTapCenter",
+  LANE_PINCH_LEFT: "lanePinchLeft",
+  LANE_PINCH_RIGHT: "lanePinchRight",
+};

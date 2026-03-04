@@ -30,8 +30,8 @@ pnpm add phaser
 ```
 
 Phaser is a **bridge dependency** because:
-- The emulator uses `Phaser.Events.EventEmitter` for the EventBus (no game logic)
-- Games use Phaser for rendering + physics
+- The emulator uses Phaser's `Events.EventEmitter` for the EventBus (named import: `import { Events } from 'phaser'`)
+- Games use Phaser for rendering + physics (named imports: `import { Scene } from 'phaser'`, `import { AUTO, Game } from 'phaser'`)
 - Both import from the same `phaser` package
 
 ---
@@ -65,14 +65,16 @@ SAVE_REQUESTED { state } ──→     SystemOverlay listens    ──→     pe
 
 ---
 
-## 3. The Singleton Event Bus
+## PHASE 4: Integration Contract Implementation
+
+### Step 4.1 — The Singleton Event Bus
 
 **File: `src/lib/eventBus.js`**
 
 ```javascript
-import Phaser from 'phaser';
+import { Events } from 'phaser';
 
-export const EventBus = new Phaser.Events.EventEmitter();
+export const EventBus = new Events.EventEmitter();
 
 export const EVENTS = {
   // Game → React
@@ -89,7 +91,7 @@ export const EVENTS = {
 };
 ```
 
-### Event Contracts:
+**Event Contracts:**
 
 | Event | Direction | Payload | Emitters | Listeners |
 |---|---|---|---|---|
@@ -102,17 +104,15 @@ export const EVENTS = {
 | `SYSTEM_RESUME` | React → Game | `void` | SystemOverlay resume button | MainScene → `this.scene.resume()` |
 | `GAME_RESTART` | React → Game | `void` | Game Over "Play Again" button | MainScene → `this.scene.restart()` |
 
-### Rules:
+**Rules:**
 - **Throttle `SCORE_UPDATED`:** Emit at most every 500ms. Never per-frame.
 - **No direct React↔Phaser prop passing.** EventBus is the ONLY bridge.
 - **Cleanup on unmount.** React components must `EventBus.off()` in `useEffect` cleanup.
 - **Payload shape is the contract.** Games must emit exactly these shapes. The emulator must consume exactly these shapes.
 
----
+### Step 4.2 — The Zustand Stores (Shared State)
 
-## 4. The Zustand Stores (Shared State)
-
-### 4.1 Emulator Store
+#### 4.2.1 Emulator Store
 
 **File: `src/store/emulatorStore.js`**
 
@@ -139,7 +139,7 @@ export const useEmulatorStore = create((set, get) => ({
 }));
 ```
 
-### 4.2 Arcade Store
+#### 4.2.2 Arcade Store
 
 **File: `src/store/arcadeStore.js`**
 
@@ -155,9 +155,7 @@ export const useArcadeStore = create((set) => ({
 }));
 ```
 
----
-
-## 5. The Game Wrapper (Phaser ↔ React Bridge Component)
+### Step 4.3 — The Game Wrapper (Phaser ↔ React Bridge Component)
 
 **File: `src/components/emulator/GameWrapper.jsx`**
 
@@ -167,29 +165,33 @@ This is the **only** React component that touches Phaser directly.
 'use client'
 ```
 
-### Responsibilities:
+**Responsibilities:**
 1. Render a `<div ref={containerRef}>` as the Phaser canvas parent
-2. Dynamically import Phaser and game scenes inside `useEffect` (no SSR)
-3. Create `new Phaser.Game(config)` with merged base + cartridge config
+2. Import Phaser using **named imports** at module level: `import { AUTO, Game } from 'phaser'` (safe because GameWrapper is loaded via `next/dynamic({ ssr: false })` in PlayClient)
+3. Create `new Game(config)` with merged base + cartridge config (named `Game` import, not `Phaser.Game`)
 4. Guard against React Strict Mode double-init: `if (!gameRef.current && containerRef.current)`
 5. Destroy game on unmount: `game.destroy(true)`
+6. Uses `useEffect` (not `useLayoutEffect`) because `sceneImporter` is async.
 
-### Props:
+**Props:**
 | Prop | Type | Description |
 |---|---|---|
 | `gameId` | string | Registry key (e.g., `'dustbowl-dash'`) |
 | `width` | number | Canvas width (default: 800) |
 | `height` | number | Canvas height (default: 600) |
 
-### Dynamic Import Strategy:
+**Dynamic Import Strategy:**
 
 ```javascript
+import { AUTO, Game } from 'phaser';
+import { GAME_REGISTRY } from '@/games/registry';
+
+// ...
+
 useEffect(() => {
   let isMounted = true;
   
   async function initGame() {
-    const Phaser = (await import('phaser')).default;
-    const { GAME_REGISTRY } = await import('@/games/registry');
     const cartridge = GAME_REGISTRY[gameId];
     
     if (!cartridge?.sceneImporter || !isMounted || gameRef.current) return;
@@ -197,15 +199,17 @@ useEffect(() => {
     // Each cartridge provides a `sceneImporter` function that returns scene classes
     const scenes = await cartridge.sceneImporter();
     
+    if (!isMounted) return;
+    
     const config = {
-      type: Phaser.AUTO,
+      type: AUTO,
       parent: containerRef.current,
       width, height,
       ...cartridge.config,
       scene: scenes,
     };
     
-    gameRef.current = new Phaser.Game(config);
+    gameRef.current = new Game(config);
   }
   
   initGame();
@@ -220,9 +224,7 @@ useEffect(() => {
 }, [gameId, width, height]);
 ```
 
----
-
-## 6. The System Overlay (HUD Layer)
+### Step 4.4 — The System Overlay (HUD Layer)
 
 **File: `src/components/emulator/SystemOverlay.jsx`**
 
@@ -230,13 +232,13 @@ useEffect(() => {
 'use client'
 ```
 
-### Responsibilities:
+**Responsibilities:**
 1. Render HUD on top of the game canvas (absolute positioned, `pointer-events-none`)
 2. Display: game title, score, ammo count, pause button
 3. Listen to EventBus events and update Zustand + trigger persistence
 4. Render game-over modal when `PLAYER_DIED` fires
 
-### EventBus Subscriptions (in `useEffect`):
+**EventBus Subscriptions (in `useEffect`):**
 
 ```javascript
 useEffect(() => {
@@ -262,20 +264,18 @@ useEffect(() => {
 }, [gameId, user]);
 ```
 
-### Pause Flow:
+**Pause Flow:**
 1. Pause button click → `togglePause()` in Zustand
 2. If pausing → `EventBus.emit(EVENTS.SYSTEM_PAUSE)` → Phaser `scene.pause()`
 3. If resuming → `EventBus.emit(EVENTS.SYSTEM_RESUME)` → Phaser `scene.resume()`
 
-### Game Over Modal:
+**Game Over Modal:**
 - "GAME OVER" in saloon font
 - Final score (gold)
 - **Logged in:** "PLAY AGAIN" button → `EventBus.emit(EVENTS.GAME_RESTART)` + reset store, "HOME" button → `router.push('/')`
 - **Guest:** Same + "LOG IN TO SAVE SCORE" button → opens auth modal
 
----
-
-## 7. The Game Registry
+### Step 4.5 — The Game Registry
 
 **File: `src/games/registry.js`**
 
@@ -293,8 +293,8 @@ export const GAME_REGISTRY = {
     },
     // Dynamic scene importer — avoids bundling Phaser scenes in SSR
     sceneImporter: async () => {
-      const { default: BootScene } = await import('@/games/dustbowl-dash/scenes/BootScene');
-      const { default: MainScene } = await import('@/games/dustbowl-dash/scenes/MainScene');
+      const { BootScene } = await import('@/games/dustbowl-dash/scenes/BootScene');
+      const { MainScene } = await import('@/games/dustbowl-dash/scenes/MainScene');
       return [BootScene, MainScene];
     },
   },
@@ -333,7 +333,7 @@ export const GAME_REGISTRY = {
 };
 ```
 
-### How to Add a New Game:
+**How to Add a New Game:**
 
 1. Create a folder: `src/games/[your-game-id]/`
 2. Add scenes (at minimum `BootScene.js` and `MainScene.js`)
@@ -349,9 +349,7 @@ export const GAME_REGISTRY = {
 5. Add game icon to `public/assets/carousel/`
 6. That's it. The emulator picks it up automatically.
 
----
-
-## 8. The Dynamic Play Route
+### Step 4.6 — The Dynamic Play Route
 
 **File: `src/app/play/[gameId]/page.js`**
 
@@ -391,7 +389,7 @@ export default async function PlayPage({ params }) {
 
 ---
 
-## 9. Bridge Folder Structure
+## 5. Bridge Folder Structure
 
 ```
 src/
@@ -415,15 +413,16 @@ src/
 
 ---
 
-## 10. Testing the Bridge in Isolation
+## 6. Testing the Bridge in Isolation
 
 ### Mock Game (for testing emulator without a real game):
 
 Create `src/games/mock-game/scenes/MockScene.js`:
 ```javascript
+import { Scene } from 'phaser';
 import { EventBus, EVENTS } from '@/lib/eventBus';
 
-export default class MockScene extends Phaser.Scene {
+export class MockScene extends Scene {
   constructor() { super('MockScene'); }
   
   create() {
@@ -471,7 +470,7 @@ export const EVENTS = {
 };
 ```
 
-### Verification Checklist:
+**Verification Checklist:**
 
 - [ ] GameWrapper creates Phaser instance, destroys on unmount
 - [ ] EventBus events flow correctly in both directions
@@ -491,7 +490,7 @@ export const EVENTS = {
 3. **Games never call fetch() or localStorage directly.** They emit events; the bridge persists.
 4. **Throttle `SCORE_UPDATED` to 500ms.** Never per-frame.
 5. **Every game must emit: `GAME_READY`, `SCORE_UPDATED`, `PLAYER_DIED`.** Must listen for: `SYSTEM_PAUSE`, `SYSTEM_RESUME`, `GAME_RESTART`.
-6. **`useEffect` cleanup:** Always unsubscribe EventBus listeners on unmount.
+6. **`useEffect` cleanup:** Always unsubscribe EventBus listeners on unmount. Use `EventBus.off(event, handler)` for targeted removal (preferred in multi-listener contexts like SystemOverlay) or `EventBus.removeListener('event')` for blanket removal (when a component is the sole listener for that event).
 7. **Object pooling in games.** No `new Sprite()` in update loops.
 8. **Delta-normalize all movement.** Multiply speed by `(delta / 1000)`.
 9. **pnpm only.** All package commands use `pnpm`.

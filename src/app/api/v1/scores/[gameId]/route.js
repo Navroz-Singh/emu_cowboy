@@ -9,9 +9,52 @@ function toInteger(value, fallback = 0) {
 }
 
 function normalizeCountryCode(countryCode) {
-  if (typeof countryCode !== "string") return "ZZ";
+  if (typeof countryCode !== "string") return "XX";
   const normalized = countryCode.trim().toUpperCase();
-  return normalized.length === 2 ? normalized : "ZZ";
+  return normalized.length === 2 ? normalized : "XX";
+}
+
+async function upsertLeaderboardBestScore({ userId, gameId, value, countryCode, achievedAt }) {
+  const existing = await prisma.leaderboardEntry.findUnique({
+    where: {
+      userId_gameId: {
+        userId,
+        gameId,
+      },
+    },
+  });
+
+  if (!existing) {
+    await prisma.leaderboardEntry.create({
+      data: {
+        userId,
+        gameId,
+        value,
+        countryCode,
+        achievedAt,
+      },
+    });
+    return true;
+  }
+
+  if (value > existing.value) {
+    await prisma.leaderboardEntry.update({
+      where: {
+        userId_gameId: {
+          userId,
+          gameId,
+        },
+      },
+      data: {
+        value,
+        countryCode,
+        achievedAt,
+      },
+    });
+    return true;
+  }
+
+  return false;
 }
 
 export async function GET(request, { params }) {
@@ -53,6 +96,10 @@ export async function GET(request, { params }) {
       countryCode: row.countryCode,
       achievedAt: row.achievedAt,
     })),
+  }, {
+    headers: {
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30",
+    },
   });
 }
 
@@ -73,74 +120,52 @@ export async function POST(request, { params }) {
   const body = await request.json();
   const value = toInteger(body?.value, -1);
   const timePlayed = toInteger(body?.timePlayed, 0);
-  const countryCode = normalizeCountryCode(body?.countryCode);
+  const countryCode = normalizeCountryCode(request.headers.get("x-vercel-ip-country"));
 
-  if (value < 0) {
+  if (!Number.isInteger(value) || value <= 0) {
     return Response.json({ error: "Invalid score value" }, { status: 400 });
+  }
+
+  if (!Number.isInteger(timePlayed) || timePlayed < 0) {
+    return Response.json({ error: "Invalid timePlayed value" }, { status: 400 });
   }
 
   const createdAt = new Date();
 
-  const scoreLog = await prisma.scoreLog.create({
-    data: {
+  const [scoreLog, leaderboardUpdated] = await Promise.all([
+    prisma.scoreLog.create({
+      data: {
+        userId,
+        gameId,
+        value,
+        countryCode,
+        createdAt,
+      },
+    }),
+    upsertLeaderboardBestScore({
       userId,
       gameId,
       value,
       countryCode,
-      createdAt,
-    },
-  });
-
-  const existingLeaderboard = await prisma.leaderboardEntry.findUnique({
-    where: {
-      userId_gameId: {
-        userId,
-        gameId,
-      },
-    },
-  });
-
-  const shouldUpdateLeaderboard = !existingLeaderboard || value >= existingLeaderboard.value;
-
-  if (shouldUpdateLeaderboard) {
-    await prisma.leaderboardEntry.upsert({
-      where: {
-        userId_gameId: {
-          userId,
-          gameId,
-        },
-      },
+      achievedAt: createdAt,
+    }),
+    prisma.userStat.upsert({
+      where: { userId },
       update: {
-        value,
-        countryCode,
-        achievedAt: createdAt,
+        totalScore: { increment: BigInt(value) },
+        gamesPlayed: { increment: 1 },
+        totalTimePlayed: { increment: timePlayed },
+        lastPlayedGame: gameId,
       },
       create: {
         userId,
-        gameId,
-        value,
-        countryCode,
-        achievedAt: createdAt,
+        totalScore: BigInt(value),
+        gamesPlayed: 1,
+        totalTimePlayed: timePlayed,
+        lastPlayedGame: gameId,
       },
-    });
-  }
-
-  await prisma.userStat.upsert({
-    where: { userId },
-    update: {
-      totalScore: { increment: BigInt(value) },
-      gamesPlayed: { increment: 1 },
-      totalTimePlayed: { increment: timePlayed },
-      lastPlayedGame: gameId,
-    },
-    create: {
-      userId,
-      totalScore: BigInt(value),
-      gamesPlayed: 1,
-      totalTimePlayed: timePlayed,
-      lastPlayedGame: gameId,
-    },
-  });
+    }),
+  ]);
 
   return Response.json({
     success: true,
@@ -151,6 +176,6 @@ export async function POST(request, { params }) {
       countryCode: scoreLog.countryCode,
       createdAt: scoreLog.createdAt,
     },
-    leaderboardUpdated: shouldUpdateLeaderboard,
+    leaderboardUpdated,
   });
 }

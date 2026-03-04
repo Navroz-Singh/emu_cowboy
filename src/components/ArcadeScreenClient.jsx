@@ -18,7 +18,7 @@ const VIEW_MAP = {
   [TABS.PROFILE]: ProfileView,
 };
 
-export default function ArcadeScreenClient({ user }) {
+export default function ArcadeScreenClient({ user, userStat }) {
   const activeTab = useArcadeStore((state) => state.activeTab);
   const isSwitchingTab = useArcadeStore((state) => state.isSwitchingTab);
 
@@ -26,9 +26,9 @@ export default function ArcadeScreenClient({ user }) {
 
   return (
     <div className="relative h-full w-full">
-      <ActiveView user={user} />
+      <ActiveView user={user} userStat={userStat} />
       {isSwitchingTab ? (
-        <div className="pointer-events-none absolute inset-0 z-20 bg-[var(--screen-bg)]/45 loading-blink" />
+        <div className="pointer-events-none absolute inset-0 z-20 bg-(--screen-bg)/45 loading-blink" />
       ) : null}
       <AuthModal />
     </div>

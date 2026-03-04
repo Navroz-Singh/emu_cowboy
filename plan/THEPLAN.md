@@ -40,4 +40,5 @@ Phase 10 →  PLAN_EMULATOR.md    Deployment
 - **Guest persistence:** Scores/saves go to localStorage for guests, database for logged-in users, auto-migrated on login.
 - **No TypeScript.** JavaScript (ES6+) only.
 - **EventBus is the only bridge** between React and Phaser.
+- **Modern Phaser imports:** Use named imports from `phaser` — `import { Scene } from 'phaser'`, `import { Events } from 'phaser'`, `import { AUTO, Game } from 'phaser'`. Use default import (`import Phaser from 'phaser'`) only when accessing utility namespaces (`Phaser.Math`, `Phaser.Input.Keyboard`, etc.). Scene classes use named exports (`export class X extends Scene`), not default exports. See `sample_phaser_nextjs_template.txt` for canonical patterns.
 - **Before writing code, explain what you're going to do and how you're going to do it and always ask for confirmation**

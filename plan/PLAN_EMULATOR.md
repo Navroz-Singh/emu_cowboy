@@ -833,9 +833,9 @@ When user is a guest (not logged in), the Profile view reads from `localStorage`
 
 ---
 
-## PHASE 4: Backend API Routes
+## PHASE 5: Backend API Routes
 
-### Step 4.1 — Score Submission & Leaderboard Endpoint
+### Step 5.1 — Score Submission & Leaderboard Endpoint
 
 **File: `src/app/api/v1/scores/[gameId]/route.js`**
 
@@ -884,7 +884,7 @@ When user is a guest (not logged in), the Profile view reads from `localStorage`
    ```
 4. Return with `Cache-Control: public, s-maxage=60, stale-while-revalidate=30`
 
-### Step 4.2 — Save State (Memory Card) Endpoint
+### Step 5.2 — Save State (Memory Card) Endpoint
 
 **File: `src/app/api/v1/saves/[gameId]/route.js`**
 
@@ -901,9 +901,9 @@ When user is a guest (not logged in), the Profile view reads from `localStorage`
 
 ---
 
-## PHASE 5: Frontend — The Arcade Cabinet Shell
+## PHASE 6: Frontend Shell (Cabinet, Navbar, Views, Auth Modal)
 
-### Step 5.1 — Global Styles & CSS Variables
+### Step 6.1 — Global Styles & CSS Variables
 
 **File: `src/app/globals.css`**
 
@@ -936,7 +936,7 @@ body {
 }
 ```
 
-### Step 5.2 — Root Layout
+### Step 6.2 — Root Layout
 
 **File: `src/app/layout.js`**
 
@@ -946,7 +946,7 @@ body {
 - `<html>` and `<body>` get the pixel font by default
 - Do NOT include `<Navbar>` here — it lives inside the screen frame
 
-### Step 5.3 — Cabinet Shell Component
+### Step 6.3 — Cabinet Shell Component
 
 **File: `src/components/cabinet/CabinetShell.jsx`**
 
@@ -956,7 +956,7 @@ body {
 - Bottom-right: glowing white four-pointed sparkle star
 - Centers the `<ScreenFrame>` child
 
-### Step 5.4 — Screen Frame Component
+### Step 6.4 — Screen Frame Component
 
 **File: `src/components/cabinet/ScreenFrame.jsx`**
 
@@ -965,7 +965,7 @@ body {
 - Interior: `--screen-bg`
 - Three vertical sections: Navbar → {children} → GameCarousel
 
-### Step 5.5 — Navbar Component
+### Step 6.5 — Navbar Component
 
 **File: `src/components/ui/Navbar.jsx`**
 
@@ -977,7 +977,7 @@ body {
 - Login → opens auth modal. Logout → `authClient.signOut()` then `router.refresh()`
 - `React.memo` the entire Navbar
 
-### Step 5.6 — Game Carousel Component
+### Step 6.6 — Game Carousel Component
 
 **File: `src/components/ui/GameCarousel.jsx`**
 
@@ -985,7 +985,7 @@ body {
 - 5 square icons via `<GameCarouselIcon>` (React.memo'd)
 - Selected icon gets `.glow-gold`
 
-### Step 5.7 — Main Page (Arcade Screen Shell — SSR)
+### Step 6.7 — Main Page (Arcade Screen Shell — SSR)
 
 **File: `src/app/page.js`**
 
@@ -1015,33 +1015,33 @@ export default async function HomePage() {
 - Renders the active view (AllGames, Leaderboards, Community, Profile)
 - Passes `user` prop to views that need it
 
-### Step 5.8 — ALL GAMES View
+### Step 6.8 — ALL GAMES View
 
 - Reads `selectedGameId` from `arcadeStore`
 - Looks up game data from `GAME_REGISTRY` (defined in PLAN_BRIDGE.md)
 - Two-column: hero image + title, description, CTA button, leaderboard snippet
 - CTA → `PeepholeTransition` → `/play/[gameId]`
 
-### Step 5.9 — LEADERBOARDS View
+### Step 6.9 — LEADERBOARDS View
 
 - Two-column: small hero image + full data table
 - `useLeaderboard(gameId, { country, sort })` custom hook
 - Current user row highlighted; guest local high score shown at bottom
 - `useMemo` for filtered/sorted data
 
-### Step 5.10 — COMMUNITY View
+### Step 6.10 — COMMUNITY View
 
 - Three-column hardcoded placeholder grid
 - No backend wiring for MVP
 
-### Step 5.11 — PROFILE View
+### Step 6.11 — PROFILE View
 
 - Three-column: identity + stats + achievements
 - **Logged in:** SSR user data + `UserStat` from database (pre-aggregated: `totalScore`, `gamesPlayed`, `totalTimePlayed`, `lastPlayedGame`). Fetched server-side via `prisma.userStat.findUnique({ where: { userId } })`. `totalScore` is `BigInt` — convert to string before sending to client.
 - **Guest:** Local stats from `getLocalStats()` persistence helper (mirrors `UserStat` shape), with `"LOG IN TO SAVE YOUR PROGRESS"` banner
 - `useMemo` for computed stat values
 
-### Step 5.12 — Auth Forms
+### Step 6.12 — Auth Forms
 
 **Files: `LoginForm.jsx`, `RegisterForm.jsx`**
 
@@ -1052,7 +1052,7 @@ export default async function HomePage() {
 - Debounced validation (300ms)
 - Optimistic UI: disable button + spinner on submit
 
-### Step 5.13 — Peephole Transition Component
+### Step 6.13 — Peephole Transition Component
 
 1. Capture click coordinates → full-screen overlay
 2. `clip-path: circle(0px)` → animate to `circle(150%)`
@@ -1060,9 +1060,9 @@ export default async function HomePage() {
 
 ---
 
-## PHASE 6: Polish & Integration
+## PHASE 8: Polish & Integration
 
-### Step 6.1 — Pixel-Perfect Arcade Theme
+### Step 8.1 — Pixel-Perfect Arcade Theme
 
 - Cabinet etched lines (CSS repeating-linear-gradient on body)
 - Screw/rivet decorations
@@ -1070,7 +1070,7 @@ export default async function HomePage() {
 - Double-border treatment everywhere
 - Font sizing for "Press Start 2P" (10-14px body, 8-10px table data)
 
-### Step 6.2 — Game Over Screen (in SystemOverlay — defined in PLAN_BRIDGE.md)
+### Step 8.2 — Game Over Screen (in SystemOverlay — defined in PLAN_BRIDGE.md)
 
 When `PLAYER_DIED` fires:
 - "GAME OVER" in saloon font
@@ -1078,13 +1078,13 @@ When `PLAYER_DIED` fires:
 - Guest: "PLAY AGAIN" + "LOG IN TO SAVE SCORE" buttons
 - Logged in: "PLAY AGAIN" + "HOME" buttons
 
-### Step 6.3 — Responsive Considerations
+### Step 8.3 — Responsive Considerations
 
 - 16:9 container scales via `max-width` + `aspect-ratio`
 - `transform: scale()` for very small screens
 - Touch controls: stretch goal, not MVP
 
-### Step 6.4 — Auth Modal Integration
+### Step 8.4 — Auth Modal Integration
 
 - Modal over arcade screen when LOGIN clicked
 - Tab toggle Login / Register
@@ -1093,9 +1093,9 @@ When `PLAYER_DIED` fires:
 
 ---
 
-## PHASE 7: Emulator Testing & Verification
+## PHASE 9: Testing & Verification
 
-### Step 7.1 — Verify Arcade Shell
+### Step 9.1 — Verify Arcade Shell
 1. `pnpm run dev`
 2. Cabinet exterior visible (tan background, etched lines, sparkle)
 3. Screen frame centered with thick brown border
@@ -1103,35 +1103,35 @@ When `PLAYER_DIED` fires:
 5. Game carousel at bottom with 5 icons
 6. Tabs switch views, carousel icons update selection
 
-### Step 7.2 — Verify Views
+### Step 9.2 — Verify Views
 1. ALL GAMES: hero image, title, CTA button, leaderboard snippet
 2. LEADERBOARDS: data table, filters, medals, user highlight
 3. COMMUNITY: 3-column hardcoded grid
 4. PROFILE (guest): local stats, "LOG IN" banner
 5. PROFILE (logged in): SSR user data, server stats
 
-### Step 7.3 — Verify Auth Flow (SSR)
+### Step 9.3 — Verify Auth Flow (SSR)
 1. Page loads → "LOGIN" button (no auth flash)
 2. Click LOGIN → modal with email + password
 3. Register → account created → local data migrated → Navbar shows username instantly (SSR)
 4. Refresh → user persists
 5. Logout → `router.refresh()` → LOGIN returns
 
-### Step 7.4 — Verify Guest Persistence
+### Step 9.4 — Verify Guest Persistence
 1. Play game as guest → score saved to localStorage
 2. Check Profile → local stats shown with "(LOCAL)" label
 3. Register/login → local scores migrated to DB
 4. localStorage cleared after migration
 5. Profile now shows server stats
 
-### Step 7.5 — Verify API Endpoints
+### Step 9.5 — Verify API Endpoints
 1. POST score → saved to DB
 2. GET leaderboard → top 15 unique users
 3. Filter by country works
 4. Save/load memory card works
 5. Verify data via `pnpm exec prisma studio`
 
-### Step 7.6 — Verify Performance
+### Step 9.6 — Verify Performance
 1. No unnecessary re-renders (React DevTools Profiler)
 2. Leaderboard table stable when unrelated state changes
 3. Carousel icons don't mass-re-render
@@ -1139,9 +1139,9 @@ When `PLAYER_DIED` fires:
 
 ---
 
-## PHASE 8: Deployment
+## PHASE 10: Deployment
 
-### Step 8.1 — Pre-Deployment Checklist
+### Step 10.1 — Pre-Deployment Checklist
 - [ ] All `.env` variables set in Vercel dashboard
 - [ ] `DATABASE_URL` points to Prisma Postgres production instance
 - [ ] `BETTER_AUTH_URL` set to production domain
@@ -1151,13 +1151,13 @@ When `PLAYER_DIED` fires:
 - [ ] `next.config.mjs` has no dev-only settings
 - [ ] All placeholder assets replaced (or acceptable for MVP)
 
-### Step 8.2 — Deploy to Vercel
+### Step 10.2 — Deploy to Vercel
 ```bash
 vercel deploy --prod
 ```
 Or connect GitHub repo for automatic deploys.
 
-### Step 8.3 — Post-Deploy Verification
+### Step 10.3 — Post-Deploy Verification
 - Test auth flow on production (SSR session rendering, modal, local→DB migration)
 - Verify leaderboard API returns data (with `x-vercel-ip-country` header now real)
 - Check Edge caching on leaderboard endpoint

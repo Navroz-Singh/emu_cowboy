@@ -1,0 +1,6 @@
+# Temporary files created for Dustbowl Dash development playground
+# Delete these before final deployment when no longer needed.
+
+src/app/dev/dustbowl/page.js
+src/app/dev/dustbowl/DustbowlDevClient.jsx
+temporary_files.txt

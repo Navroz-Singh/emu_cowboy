@@ -9,7 +9,7 @@ export default async function PlayPage({ params }) {
   const { gameId } = await params;
   const cartridge = GAME_REGISTRY[gameId];
 
-  if (!cartridge || !cartridge.sceneImporter || !cartridge.config) {
+  if (!cartridge || !cartridge.config) {
     return notFound();
   }
 

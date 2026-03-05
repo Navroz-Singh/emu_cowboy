@@ -62,6 +62,37 @@ export class BootScene extends Scene {
     });
     this.load.image("bullet", `${SPRITES_BASE_PATH}/bullet.png`);
     this.load.image("shadow", `${SPRITES_BASE_PATH}/shadow.png`);
+
+    this.load.spritesheet("rock-bandit", `${SPRITES_BASE_PATH}/rock_bandit.png`, {
+      frameWidth: 100,
+      frameHeight: 100,
+    });
+    this.load.spritesheet("quicksand", `${SPRITES_BASE_PATH}/quicksand.png`, {
+      frameWidth: 100,
+      frameHeight: 100,
+    });
+    this.load.spritesheet("bison-totem", `${SPRITES_BASE_PATH}/bison_totem.png`, {
+      frameWidth: 100,
+      frameHeight: 100,
+    });
+    this.load.spritesheet("train-kit", `${SPRITES_BASE_PATH}/train_kit.png`, {
+      frameWidth: 150,
+      frameHeight: 300,
+    });
+    this.load.spritesheet("cowboy-jump-to-train", `${SPRITES_BASE_PATH}/cowboy_jump_to_train.png`, {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+    this.load.spritesheet("cowboy-jump-to-horse", `${SPRITES_BASE_PATH}/cowboy_jump_to_horse.png`, {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+    this.load.spritesheet("only-horse-running", `${SPRITES_BASE_PATH}/only_horse_running.png`, {
+      frameWidth: 64,
+      frameHeight: 128,
+    });
+    this.load.image("coin", `${SPRITES_BASE_PATH}/coin.png`);
+    this.load.image("bullet-refill", `${SPRITES_BASE_PATH}/bullet_refill.png`);
   }
 
   create() {
@@ -108,6 +139,24 @@ export class BootScene extends Scene {
       end: 5,
       frameRate: 14,
       repeat: 0,
+    });
+
+    createAnimationIfPossible(this, {
+      key: "quicksand-swirl",
+      textureKey: "quicksand",
+      start: 0,
+      end: 2,
+      frameRate: 6,
+      repeat: -1,
+    });
+
+    createAnimationIfPossible(this, {
+      key: "horse-only-run",
+      textureKey: "only-horse-running",
+      start: 0,
+      end: 1,
+      frameRate: 10,
+      repeat: -1,
     });
 
     EventBus.emit(EVENTS.GAME_READY);

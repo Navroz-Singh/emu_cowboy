@@ -213,8 +213,28 @@ export class ObstacleManager {
       [OBSTACLE_TYPE.TUMBLEWEED]: 3,
     };
 
-    if (Number.isInteger(frameMap[type]) && this.scene.textures.exists("obstacles")) {
-      obstacle.setTexture("obstacles", frameMap[type]);
+    const textureMap = {
+      [OBSTACLE_TYPE.CACTUS]: "obstacles",
+      [OBSTACLE_TYPE.BARREL]: "obstacles",
+      [OBSTACLE_TYPE.SIGN]: "obstacles",
+      [OBSTACLE_TYPE.TUMBLEWEED]: "obstacles",
+      [OBSTACLE_TYPE.BISON_SKULL]: "bison-totem",
+      [OBSTACLE_TYPE.TOTEM]: "bison-totem",
+      [OBSTACLE_TYPE.ROCK_BANDIT]: "rock-bandit",
+    };
+
+    const customFrameMap = {
+      [OBSTACLE_TYPE.BISON_SKULL]: 0,
+      [OBSTACLE_TYPE.TOTEM]: 1,
+      [OBSTACLE_TYPE.ROCK_BANDIT]: 0,
+    };
+
+    const textureKey = textureMap[type] || "obstacles";
+    if (this.scene.textures.exists(textureKey)) {
+      const frame = Number.isInteger(customFrameMap[type]) ? customFrameMap[type] : frameMap[type];
+      if (Number.isInteger(frame)) {
+        obstacle.setTexture(textureKey, frame);
+      }
     }
 
     obstacle.setData("type", type);
@@ -242,13 +262,15 @@ export class ObstacleManager {
     return obstacle;
   }
 
-  spawnWagon() {
+  spawnWagon(preferredPair = null) {
     if (!this.wagonPool) return false;
 
     const wagon = this.wagonPool.getFirstDead(false);
     if (!wagon) return false;
 
-    const pair = Phaser.Math.Between(0, 1);
+    const pair = Number.isInteger(preferredPair) && preferredPair >= 0 && preferredPair <= 1
+      ? preferredPair
+      : Phaser.Math.Between(0, 1);
 
     wagon.x = (this.scene.lanes[pair] + this.scene.lanes[pair + 1]) / 2;
     wagon.y = this.scene.constants.SPAWN_Y;
@@ -269,6 +291,7 @@ export class ObstacleManager {
 
   spawnTumbleweed() {
     if (!this.obstaclePool) return false;
+    if (this.scene.trainHeistManager?.isHeistActive) return false;
 
     const obstacle = this.obstaclePool.getFirstDead(false);
     if (!obstacle) return false;
@@ -316,8 +339,44 @@ export class ObstacleManager {
   getScaleForType(type) {
     if (type === OBSTACLE_TYPE.CACTUS) return this.scene.constants.CACTUS_SCALE;
     if (type === OBSTACLE_TYPE.SIGN) return this.scene.constants.SIGN_SCALE;
+    if (type === OBSTACLE_TYPE.BISON_SKULL) return this.scene.constants.BISON_SKULL_SCALE || this.scene.constants.BASE_SPRITE_SCALE;
+    if (type === OBSTACLE_TYPE.TOTEM) return this.scene.constants.TOTEM_SCALE || this.scene.constants.SIGN_SCALE;
+    if (type === OBSTACLE_TYPE.ROCK_BANDIT) return this.scene.constants.BASE_SPRITE_SCALE;
     if (type === OBSTACLE_TYPE.WAGON) return this.scene.constants.WAGON_SCALE;
     return this.scene.constants.BASE_SPRITE_SCALE;
+  }
+
+  clearLaneWindow(laneIndex, minY, maxY) {
+    if (!Number.isInteger(laneIndex) || laneIndex < 0 || laneIndex > 2) return;
+
+    const laneX = this.scene.lanes[laneIndex];
+    const obstacles = this.obstaclePool?.getChildren?.() || [];
+
+    for (let index = 0; index < obstacles.length; index += 1) {
+      const obstacle = obstacles[index];
+      if (!obstacle?.active) continue;
+      if (obstacle.getData("type") === OBSTACLE_TYPE.TUMBLEWEED) continue;
+      if (Math.abs(obstacle.x - laneX) > 90) continue;
+      if (obstacle.y < minY || obstacle.y > maxY) continue;
+
+      this.disablePooledObject(obstacle);
+    }
+  }
+
+  clearForHeistTransition() {
+    const obstacles = this.obstaclePool?.getChildren?.() || [];
+    for (let index = 0; index < obstacles.length; index += 1) {
+      const obstacle = obstacles[index];
+      if (!obstacle?.active) continue;
+      this.disablePooledObject(obstacle);
+    }
+
+    const wagons = this.wagonPool?.getChildren?.() || [];
+    for (let index = 0; index < wagons.length; index += 1) {
+      const wagon = wagons[index];
+      if (!wagon?.active) continue;
+      this.disablePooledObject(wagon);
+    }
   }
 
   configureObstacleHitbox(obstacle, type) {
@@ -341,6 +400,18 @@ export class ObstacleManager {
         obstacle.body.setSize(24, 42, true);
         obstacle.body.setOffset(28, 20);
         break;
+      case OBSTACLE_TYPE.BISON_SKULL:
+        obstacle.body.setSize(46, 26, true);
+        obstacle.body.setOffset(27, 42);
+        break;
+      case OBSTACLE_TYPE.TOTEM:
+        obstacle.body.setSize(36, 58, true);
+        obstacle.body.setOffset(32, 16);
+        break;
+      case OBSTACLE_TYPE.ROCK_BANDIT:
+        obstacle.body.setSize(58, 58, true);
+        obstacle.body.setOffset(21, 24);
+        break;
       default:
         obstacle.body.setSize(44, 44, true);
         obstacle.body.setOffset(18, 18);
@@ -359,7 +430,20 @@ export class ObstacleManager {
     if (this.scene.hasDied) return;
 
     if (this.scene.actionState === ACTION_STATE.JUMPING) {
-      if (obstacleType === OBSTACLE_TYPE.CACTUS || obstacleType === OBSTACLE_TYPE.TUMBLEWEED) {
+      if (
+        obstacleType === OBSTACLE_TYPE.CACTUS
+        || obstacleType === OBSTACLE_TYPE.TUMBLEWEED
+        || obstacleType === OBSTACLE_TYPE.BISON_SKULL
+      ) {
+        this.handleNearMiss(obstacle);
+        return;
+      }
+    } else if (this.scene.isJumpInProgress) {
+      if (
+        obstacleType === OBSTACLE_TYPE.CACTUS
+        || obstacleType === OBSTACLE_TYPE.TUMBLEWEED
+        || obstacleType === OBSTACLE_TYPE.BISON_SKULL
+      ) {
         this.handleNearMiss(obstacle);
         return;
       }
@@ -386,7 +470,13 @@ export class ObstacleManager {
     this.scene.time.delayedCall(1500, () => {
       if (!this.scene.hasDied) return;
       const elapsedSeconds = Math.max(0, Math.floor((Date.now() - this.scene.startTime) / 1000));
-      EventBus.emit(EVENTS.PLAYER_DIED, { score: this.scene.score, timePlayed: elapsedSeconds });
+      const finalScore = this.scene.emitFinalScoreSnapshot?.() ?? this.scene.score;
+      EventBus.emit(EVENTS.PLAYER_DIED, {
+        score: finalScore,
+        timePlayed: elapsedSeconds,
+        rabbitsCollected: Number(this.scene.rabbitsCollected || 0),
+        coinsCollected: Number(this.scene.coinsCollected || 0),
+      });
     });
   };
 
@@ -460,6 +550,16 @@ export class ObstacleManager {
     if (!bullet?.active || !obstacle?.active) return;
 
     const obstacleType = obstacle.getData("type");
+
+    if (obstacleType === OBSTACLE_TYPE.ROCK_BANDIT) {
+      bullet.setActive(false).setVisible(false);
+      if (bullet.body) {
+        bullet.body.enable = false;
+        bullet.body.setVelocity(0, 0);
+      }
+      this.scene.enemyManager?.handleBanditShot?.(obstacle);
+      return;
+    }
 
     bullet.setActive(false).setVisible(false);
     if (bullet.body) {

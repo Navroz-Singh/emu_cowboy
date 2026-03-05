@@ -14,6 +14,14 @@ function normalizeCountryCode(countryCode) {
   return normalized.length === 2 ? normalized : "XX";
 }
 
+function normalizeRunMeta(meta) {
+  const safeMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
+  return {
+    rabbitsCollected: toInteger(safeMeta.rabbitsCollected, 0),
+    coinsCollected: toInteger(safeMeta.coinsCollected, 0),
+  };
+}
+
 async function upsertLeaderboardBestScore({ userId, gameId, value, countryCode, achievedAt }) {
   const existing = await prisma.leaderboardEntry.findUnique({
     where: {
@@ -120,6 +128,7 @@ export async function POST(request, { params }) {
   const body = await request.json();
   const value = toInteger(body?.value, -1);
   const timePlayed = toInteger(body?.timePlayed, 0);
+  const runMeta = normalizeRunMeta(body?.meta);
   const countryCode = normalizeCountryCode(request.headers.get("x-vercel-ip-country"));
 
   if (!Number.isInteger(value) || value <= 0) {
@@ -139,6 +148,7 @@ export async function POST(request, { params }) {
         gameId,
         value,
         countryCode,
+        meta: runMeta,
         createdAt,
       },
     }),
@@ -155,6 +165,8 @@ export async function POST(request, { params }) {
         totalScore: { increment: BigInt(value) },
         gamesPlayed: { increment: 1 },
         totalTimePlayed: { increment: timePlayed },
+        totalRabbitsCollected: { increment: runMeta.rabbitsCollected },
+        totalCoinsCollected: { increment: runMeta.coinsCollected },
         lastPlayedGame: gameId,
       },
       create: {
@@ -162,6 +174,8 @@ export async function POST(request, { params }) {
         totalScore: BigInt(value),
         gamesPlayed: 1,
         totalTimePlayed: timePlayed,
+        totalRabbitsCollected: runMeta.rabbitsCollected,
+        totalCoinsCollected: runMeta.coinsCollected,
         lastPlayedGame: gameId,
       },
     }),
@@ -174,6 +188,7 @@ export async function POST(request, { params }) {
       gameId: scoreLog.gameId,
       value: scoreLog.value,
       countryCode: scoreLog.countryCode,
+      meta: scoreLog.meta,
       createdAt: scoreLog.createdAt,
     },
     leaderboardUpdated,

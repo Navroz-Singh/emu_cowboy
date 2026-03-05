@@ -38,10 +38,10 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
       if (ammo !== undefined) setAmmo(ammo);
     };
 
-    const onPlayerDied = async ({ score: finalScore, timePlayed }) => {
+    const onPlayerDied = async ({ score: finalScore, timePlayed, rabbitsCollected = 0, coinsCollected = 0 }) => {
       setScore(finalScore);
       setIsGameOverVisible(true);
-      await submitScore(gameId, finalScore, user, timePlayed);
+      await submitScore(gameId, finalScore, user, timePlayed, { rabbitsCollected, coinsCollected });
     };
 
     const onSaveRequested = async ({ state }) => {

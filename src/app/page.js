@@ -19,6 +19,8 @@ export default async function Home() {
         totalScore: rawUserStat.totalScore.toString(),
         gamesPlayed: rawUserStat.gamesPlayed,
         totalTimePlayed: rawUserStat.totalTimePlayed,
+        totalRabbitsCollected: rawUserStat.totalRabbitsCollected,
+        totalCoinsCollected: rawUserStat.totalCoinsCollected,
         lastPlayedGame: rawUserStat.lastPlayedGame,
       }
     : null;

@@ -75,6 +75,7 @@ model ScoreLog {
   gameId      String
   value       Int
   countryCode String   @db.Char(2)
+  meta        Json?
   createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -105,6 +106,8 @@ model UserStat {
   totalScore      BigInt   @default(0)
   gamesPlayed     Int      @default(0)
   totalTimePlayed Int      @default(0)
+  totalRabbitsCollected Int @default(0)
+  totalCoinsCollected   Int @default(0)
   lastPlayedGame  String?
   updatedAt       DateTime @updatedAt
 

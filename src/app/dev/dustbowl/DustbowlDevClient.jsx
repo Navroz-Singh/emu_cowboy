@@ -15,6 +15,8 @@ const GAME_ID = "dustbowl-dash";
 export default function DustbowlDevClient() {
   const [score, setScore] = useState(0);
   const [ammo, setAmmo] = useState(6);
+  const [rabbitsCollected, setRabbitsCollected] = useState(0);
+  const [coinsCollected, setCoinsCollected] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [runState, setRunState] = useState("BOOTING");
   const [reloadKey, setReloadKey] = useState(0);
@@ -36,6 +38,8 @@ export default function DustbowlDevClient() {
     const onScore = (payload = {}) => {
       if (typeof payload.score === "number") setScore(payload.score);
       if (typeof payload.ammo === "number") setAmmo(payload.ammo);
+      if (typeof payload.rabbitsCollected === "number") setRabbitsCollected(payload.rabbitsCollected);
+      if (typeof payload.coinsCollected === "number") setCoinsCollected(payload.coinsCollected);
     };
     const onDied = (payload = {}) => {
       setRunState("DEAD");
@@ -72,6 +76,8 @@ export default function DustbowlDevClient() {
     setIsPaused(false);
     setScore(0);
     setAmmo(6);
+    setRabbitsCollected(0);
+    setCoinsCollected(0);
     setRunState("BOOTING");
     setLastDeath(null);
     EventBus.emit(EVENTS.GAME_RESTART);
@@ -81,6 +87,8 @@ export default function DustbowlDevClient() {
     setIsPaused(false);
     setScore(0);
     setAmmo(6);
+    setRabbitsCollected(0);
+    setCoinsCollected(0);
     setRunState("BOOTING");
     setLastDeath(null);
     setReloadKey((prev) => prev + 1);
@@ -112,16 +120,18 @@ export default function DustbowlDevClient() {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] md:grid-cols-4 md:text-xs">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] md:grid-cols-6 md:text-xs">
             <div className="arcade-border bg-black/25 px-2 py-1">SCORE: {score}</div>
             <div className="arcade-border bg-black/25 px-2 py-1">AMMO: {ammo}</div>
+            <div className="arcade-border bg-black/25 px-2 py-1">RABBITS: {rabbitsCollected}</div>
+            <div className="arcade-border bg-black/25 px-2 py-1">COINS: {coinsCollected}</div>
             <div className="arcade-border bg-black/25 px-2 py-1">PAUSED: {isPaused ? "YES" : "NO"}</div>
             <div className="arcade-border bg-black/25 px-2 py-1">KEY: {reloadKey}</div>
           </div>
 
           {lastDeath ? (
             <p className="mt-2 text-[10px] text-(--title-red) md:text-xs">
-              LAST DEATH → score: {lastDeath.score ?? "?"}, timePlayed: {lastDeath.timePlayed ?? "?"}s
+              LAST DEATH → score: {lastDeath.score ?? "?"}, timePlayed: {lastDeath.timePlayed ?? "?"}s, rabbits: {lastDeath.rabbitsCollected ?? "?"}, coins: {lastDeath.coinsCollected ?? "?"}
             </p>
           ) : null}
         </div>

@@ -43,6 +43,16 @@ export default function ProfileView({ user, userStat }) {
     return `${guestStats.gamesPlayed} (LOCAL)`;
   }, [guestStats]);
 
+  const guestRabbitsCollectedLabel = useMemo(() => {
+    if (!guestStats) return "0 (LOCAL)";
+    return `${guestStats.totalRabbitsCollected ?? 0} (LOCAL)`;
+  }, [guestStats]);
+
+  const guestCoinsCollectedLabel = useMemo(() => {
+    if (!guestStats) return "0 (LOCAL)";
+    return `${guestStats.totalCoinsCollected ?? 0} (LOCAL)`;
+  }, [guestStats]);
+
   const lastPlayedLabel = useMemo(() => {
     if (user) {
       if (!userStat?.lastPlayedGame) return "N/A";
@@ -74,6 +84,16 @@ export default function ProfileView({ user, userStat }) {
     if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0.0H";
     return `${(totalSeconds / 3600).toFixed(1)}H`;
   }, [user, userStat?.totalTimePlayed]);
+
+  const serverRabbitsCollectedLabel = useMemo(() => {
+    if (!user) return null;
+    return String(userStat?.totalRabbitsCollected ?? 0);
+  }, [user, userStat?.totalRabbitsCollected]);
+
+  const serverCoinsCollectedLabel = useMemo(() => {
+    if (!user) return null;
+    return String(userStat?.totalCoinsCollected ?? 0);
+  }, [user, userStat?.totalCoinsCollected]);
 
   const handleAvatarChange = async (image) => {
     if (!user || isAvatarSaving || user.image === image) return;
@@ -154,6 +174,10 @@ export default function ProfileView({ user, userStat }) {
         <p className="mb-2">{user ? serverGamesPlayedLabel : guestGamesPlayedLabel}</p>
         <p>TOTAL TIME PLAYED</p>
         <p className="mb-2">{user ? serverTimePlayedLabel : guestTimePlayedLabel}</p>
+        <p>RABBITS COLLECTED</p>
+        <p className="mb-2">{user ? serverRabbitsCollectedLabel : guestRabbitsCollectedLabel}</p>
+        <p>COINS COLLECTED</p>
+        <p className="mb-2">{user ? serverCoinsCollectedLabel : guestCoinsCollectedLabel}</p>
         <p>MOST PLAYED GAME</p>
         <p>{lastPlayedLabel}</p>
       </div>

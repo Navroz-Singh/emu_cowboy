@@ -134,7 +134,8 @@ function testModularManagerContracts() {
   assert(has(constantsSource, /SURGE_INCREMENT:\s*75/), "SURGE_INCREMENT constant should be 75");
   assert(has(constantsSource, /LASSO_DURATION:\s*300/), "Lasso duration should be 300ms");
   assert(has(constantsSource, /WAGON_SCALE:\s*1\.5/), "Wagon scale should be 1.5");
-  assert(has(constantsSource, /SIGN_SCALE:\s*1\.5/), "Wanted sign scale should be 1.5");
+  assert(has(constantsSource, /SIGN_SCALE:\s*1\.8/), "Wanted sign scale should be 1.8");
+  assert(has(constantsSource, /TOTEM_SCALE:\s*1\.8/), "Totem scale should be 1.8");
   assert(has(constantsSource, /BASE_SPRITE_SCALE:\s*1\.2/), "Base sprite scale should be 1.2");
   assert(has(constantsSource, /CACTUS_SCALE:\s*1\.0/), "Cactus scale should be 1.0");
 
@@ -148,7 +149,7 @@ function testModularManagerContracts() {
   assert(!has(playerSource, /KeyCodes\.SHIFT/), "PlayerController should not bind SHIFT key after remap");
   assert(has(playerSource, /direction\s*>\s*0\s*\?\s*20\s*:\s*-20/), "Lane switch tilt should be 20 degrees");
   assert(has(playerSource, /scaleX:\s*this\.scene\.constants\.BASE_SPRITE_SCALE\s*\*\s*1\.15/), "Jump height should scale from base sprite size");
-  assert(has(playerSource, /y:\s*this\.scene\.shadowBaseY\s*-\s*8/), "Jump should move shadow slightly north/backward");
+  assert(has(playerSource, /y:\s*this\.scene\.shadowBaseY\s*\+\s*40/), "Jump should move shadow slightly north/backward");
   assert(has(playerSource, /repeat:\s*7/), "Lasso vibration tween should run long enough for visible feedback");
   assert(has(playerSource, /const\s+caught\s*=\s*this\.scene\.spawnerSystem\?\.handleRabbitCaught\(rabbit\)/), "Lasso catch should be deterministic when a rabbit target exists");
   assert(!has(playerSource, /dist\s*<\s*40\s*&&\s*this\.scene\.spawnerSystem\?\.handleRabbitCaught/), "Lasso catch should not use distance miss-gating");
@@ -189,7 +190,7 @@ function testModularManagerContracts() {
   assert(has(spawnerSource, /this\.tumbleweedPatternLockUntil/), "SpawnerSystem should maintain tumbleweed pattern lock state");
   assert(has(spawnerSource, /hasActiveTumbleweed\(/), "SpawnerSystem should detect active tumbleweeds");
   assert(has(spawnerSource, /if\s*\(this\.hasActiveRabbit\(\)\)\s*\{\s*return false;/), "SpawnerSystem should pause obstacle patterns while rabbit is active");
-  assert(has(spawnerSource, /expiresAt",\s*this\.scene\.time\.now\s*\+\s*2000/), "Rabbit lifetime should be capped at ~2 seconds");
+  assert(has(spawnerSource, /expiresAt",\s*this\.scene\.time\.now\s*\+\s*catchWindowMs/), "Rabbit lifetime should be capped at ~3 seconds");
   assert(has(spawnerSource, /laneIndex",\s*laneIndex/), "Rabbit should run on a random gameplay lane");
   assert(has(spawnerSource, /fontSize:\s*"32px"/), "Rabbit alert text should use visible flash styling");
 

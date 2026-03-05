@@ -22,6 +22,14 @@ function normalizeInt(value, fallback = 0) {
   return Math.max(0, Math.trunc(numeric));
 }
 
+function normalizeRunMeta(meta) {
+  const safeMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
+  return {
+    rabbitsCollected: normalizeInt(safeMeta.rabbitsCollected, 0),
+    coinsCollected: normalizeInt(safeMeta.coinsCollected, 0),
+  };
+}
+
 function readScores(storage) {
   return parseJSON(storage.getItem(LOCAL_SCORES_KEY), {});
 }
@@ -38,15 +46,16 @@ function writeSaves(storage, saves) {
   storage.setItem(LOCAL_SAVES_KEY, JSON.stringify(saves));
 }
 
-export async function submitScore(gameId, value, user, timePlayed = 0) {
+export async function submitScore(gameId, value, user, timePlayed = 0, meta = {}) {
   const normalizedValue = normalizeInt(value);
   const normalizedTimePlayed = normalizeInt(timePlayed);
+  const normalizedMeta = normalizeRunMeta(meta);
 
   if (user) {
     const response = await fetch(`/api/v1/scores/${gameId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: normalizedValue, timePlayed: normalizedTimePlayed }),
+      body: JSON.stringify({ value: normalizedValue, timePlayed: normalizedTimePlayed, meta: normalizedMeta }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -66,6 +75,8 @@ export async function submitScore(gameId, value, user, timePlayed = 0) {
   scores[gameId].push({
     value: normalizedValue,
     timePlayed: normalizedTimePlayed,
+    rabbitsCollected: normalizedMeta.rabbitsCollected,
+    coinsCollected: normalizedMeta.coinsCollected,
     date: new Date().toISOString(),
   });
 
@@ -95,6 +106,8 @@ export function getLocalStats() {
       gamesPlayed: 0,
       totalTimePlayed: 0,
       lastPlayedGame: null,
+      totalRabbitsCollected: 0,
+      totalCoinsCollected: 0,
     };
   }
 
@@ -102,6 +115,8 @@ export function getLocalStats() {
   let totalScore = 0n;
   let gamesPlayed = 0;
   let totalTimePlayed = 0;
+  let totalRabbitsCollected = 0;
+  let totalCoinsCollected = 0;
   let lastPlayedGame = null;
   let lastDate = null;
 
@@ -112,6 +127,8 @@ export function getLocalStats() {
       totalScore += BigInt(normalizeInt(entry?.value));
       gamesPlayed += 1;
       totalTimePlayed += normalizeInt(entry?.timePlayed);
+      totalRabbitsCollected += normalizeInt(entry?.rabbitsCollected);
+      totalCoinsCollected += normalizeInt(entry?.coinsCollected);
 
       const entryDate = new Date(entry?.date || 0);
       if (!Number.isNaN(entryDate.getTime()) && (!lastDate || entryDate > lastDate)) {
@@ -126,6 +143,8 @@ export function getLocalStats() {
     gamesPlayed,
     totalTimePlayed,
     lastPlayedGame,
+    totalRabbitsCollected,
+    totalCoinsCollected,
   };
 }
 
@@ -185,7 +204,10 @@ export async function migrateLocalDataToServer(user) {
     if (!Array.isArray(entries) || entries.length === 0) continue;
 
     const best = [...entries].sort((left, right) => normalizeInt(right?.value) - normalizeInt(left?.value))[0];
-    await submitScore(gameId, normalizeInt(best?.value), user, normalizeInt(best?.timePlayed));
+    await submitScore(gameId, normalizeInt(best?.value), user, normalizeInt(best?.timePlayed), {
+      rabbitsCollected: normalizeInt(best?.rabbitsCollected),
+      coinsCollected: normalizeInt(best?.coinsCollected),
+    });
   }
 
   const saves = readSaves(storage);

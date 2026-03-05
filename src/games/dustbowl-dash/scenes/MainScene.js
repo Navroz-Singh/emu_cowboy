@@ -2,9 +2,13 @@ import * as Phaser from "phaser";
 
 import { EVENTS, EventBus } from "@/lib/eventBus";
 import { ACTION_STATE, GAME_CONSTANTS } from "@/games/dustbowl-dash/constants/GameConstants";
+import { AmmoRefillManager } from "@/games/dustbowl-dash/managers/AmmoRefillManager";
+import { EnemyManager } from "@/games/dustbowl-dash/managers/EnemyManager";
 import { ObstacleManager } from "@/games/dustbowl-dash/managers/ObstacleManager";
 import { PlayerController } from "@/games/dustbowl-dash/managers/PlayerController";
+import { QuicksandManager } from "@/games/dustbowl-dash/managers/QuicksandManager";
 import { SpawnerSystem } from "@/games/dustbowl-dash/managers/SpawnerSystem";
+import { TrainHeistManager } from "@/games/dustbowl-dash/managers/TrainHeistManager";
 import { VFXManager } from "@/games/dustbowl-dash/managers/VFXManager";
 
 const SCORE_EMIT_INTERVAL_MS = GAME_CONSTANTS.SCORE_EMIT_INTERVAL;
@@ -23,6 +27,8 @@ export class MainScene extends Phaser.Scene {
     this.currentLane = 1;
     this.ammo = 6;
     this.ammoCount = 6;
+    this.rabbitsCollected = 0;
+    this.coinsCollected = 0;
     this.lastScoreEmit = 0;
     this.startTime = 0;
     this.distanceTraveled = 0;
@@ -45,11 +51,17 @@ export class MainScene extends Phaser.Scene {
     this.keys = null;
     this.surgeTweenActive = false;
     this.shadowBaseY = 530;
+    this.cowboyOnTrain = false;
+    this.postHeistObstacleCooldownUntil = 0;
 
     this.vfxManager = null;
+    this.enemyManager = null;
+    this.ammoRefillManager = null;
     this.obstacleManager = null;
+    this.quicksandManager = null;
     this.playerController = null;
     this.spawnerSystem = null;
+    this.trainHeistManager = null;
   }
 
   create() {
@@ -63,6 +75,8 @@ export class MainScene extends Phaser.Scene {
     this.currentLane = 1;
     this.ammo = 6;
     this.ammoCount = 6;
+    this.rabbitsCollected = 0;
+    this.coinsCollected = 0;
     this.hasDied = false;
     this.startTime = Date.now();
     this.runStartAt = this.time.now;
@@ -76,6 +90,7 @@ export class MainScene extends Phaser.Scene {
     this.nextRabbitCheckpointIndex = 0;
     this.surgeTimer = 0;
     this.surgePhase = "plateau";
+    this.postHeistObstacleCooldownUntil = 0;
 
     const hasDesertTexture = this.textures.exists("desert-bg");
     this.bg = hasDesertTexture
@@ -102,6 +117,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.shadowBaseY = 530;
+    this.cowboyOnTrain = false;
     this.shadow = this.textures.exists("shadow")
       ? this.add.image(this.lanes[1], this.shadowBaseY, "shadow").setAlpha(0.5)
       : this.add.ellipse(this.lanes[1], this.shadowBaseY, 48, 24, 0x000000, 0.5);
@@ -115,11 +131,21 @@ export class MainScene extends Phaser.Scene {
 
     this.vfxManager = new VFXManager(this);
     this.obstacleManager = new ObstacleManager(this, this.vfxManager);
+    this.enemyManager = new EnemyManager(this, this.obstacleManager, this.vfxManager);
+    this.ammoRefillManager = new AmmoRefillManager(this, this.vfxManager);
+    this.quicksandManager = new QuicksandManager(this);
     this.spawnerSystem = new SpawnerSystem(this, this.obstacleManager);
+    this.trainHeistManager = new TrainHeistManager(this);
     this.playerController = new PlayerController(this, this.obstacleManager);
 
     this.obstacleManager.initObjectPools();
+    this.enemyManager.initObjectPools();
+    this.ammoRefillManager.initObjectPools();
+    this.quicksandManager.initObjectPools();
     this.obstacleManager.initCollisions();
+    this.enemyManager.initCollisions();
+    this.ammoRefillManager.initCollisions();
+    this.quicksandManager.initCollisions();
     this.playerController.initKeyboard();
     this.initBridgeListeners();
 
@@ -146,7 +172,11 @@ export class MainScene extends Phaser.Scene {
 
     this.distanceTraveled += moveAmount;
     this.obstacleManager?.update(dt, moveAmount);
+    this.enemyManager?.update(dt, moveAmount);
+    this.ammoRefillManager?.update(dt, moveAmount);
+    this.quicksandManager?.update(dt, moveAmount);
     this.spawnerSystem?.update(dt, moveAmount);
+    this.trainHeistManager?.update(dt, moveAmount);
 
     this.scoreCarry += moveAmount / 10;
     if (this.scoreCarry >= 1) {
@@ -157,7 +187,12 @@ export class MainScene extends Phaser.Scene {
 
     if (this.time.now - this.lastScoreEmitAt >= SCORE_EMIT_INTERVAL_MS) {
       this.lastScoreEmitAt = this.time.now;
-      EventBus.emit(EVENTS.SCORE_UPDATED, { score: this.score, ammo: this.ammoCount });
+      EventBus.emit(EVENTS.SCORE_UPDATED, {
+        score: this.score,
+        ammo: this.ammoCount,
+        rabbitsCollected: Number(this.rabbitsCollected || 0),
+        coinsCollected: Number(this.coinsCollected || 0),
+      });
     }
 
     this.spawnerSystem?.checkRabbitCheckpoint();
@@ -213,6 +248,23 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  emitFinalScoreSnapshot() {
+    const carry = Number(this.scoreCarry || 0);
+    if (carry >= 1) {
+      const wholePoints = Math.floor(carry);
+      this.score += wholePoints;
+      this.scoreCarry -= wholePoints;
+    }
+
+    EventBus.emit(EVENTS.SCORE_UPDATED, {
+      score: this.score,
+      ammo: this.ammoCount,
+      rabbitsCollected: Number(this.rabbitsCollected || 0),
+      coinsCollected: Number(this.coinsCollected || 0),
+    });
+    return this.score;
+  }
+
   initBridgeListeners() {
     EventBus.on(EVENTS.SYSTEM_PAUSE, this.handleSystemPause);
     EventBus.on(EVENTS.SYSTEM_RESUME, this.handleSystemResume);
@@ -221,7 +273,11 @@ export class MainScene extends Phaser.Scene {
 
   cleanupSceneSystems() {
     this.obstacleManager?.cleanup();
+    this.enemyManager?.cleanup?.();
+    this.ammoRefillManager?.cleanup?.();
+    this.quicksandManager?.cleanup?.();
     this.spawnerSystem?.cleanup?.();
+    this.trainHeistManager?.cleanup?.();
     this.vfxManager?.cleanup();
 
     EventBus.off(EVENTS.SYSTEM_PAUSE, this.handleSystemPause);

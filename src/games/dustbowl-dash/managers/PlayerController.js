@@ -8,6 +8,9 @@ export class PlayerController {
     this.scene = scene;
     this.obstacleManager = obstacleManager;
     this.scene.isJumpInProgress = false;
+    this.jumpChainCount = 0;
+    this.activeJumpTween = null;
+    this.activeShadowJumpTween = null;
   }
 
   initKeyboard() {
@@ -35,22 +38,43 @@ export class PlayerController {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.jumpSpace) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.up)) {
-      if (this.scene.actionState === ACTION_STATE.IDLE) {
+      if (this.scene.trainHeistManager?.isHeistActive && this.scene.cowboyOnTrain) {
+        this.scene.trainHeistManager?.tryReturnToHorse?.();
+        return;
+      }
+
+      const canJumpNow = this.scene.actionState === ACTION_STATE.IDLE || (this.scene.isJumpInProgress && this.jumpChainCount < 2);
+      if (canJumpNow) {
+        if (this.scene.trainHeistManager?.isHeistActive) {
+          if (this.scene.actionState === ACTION_STATE.IDLE) {
+            this.scene.trainHeistManager?.tryLeapToTrain?.();
+            return;
+          }
+        }
+
         this.jump();
       }
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.shootF)) {
-      if (this.scene.actionState === ACTION_STATE.IDLE) {
+      if (this.canUseActionWhileMoving() && !this.scene.cowboyOnTrain) {
         this.quickDraw();
       }
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.lassoE)) {
-      if (this.scene.actionState === ACTION_STATE.IDLE) {
+      if (this.canUseActionWhileMoving() && !this.scene.cowboyOnTrain) {
         this.throwLasso();
       }
     }
+  }
+
+  canUseActionWhileMoving() {
+    return (
+      this.scene.actionState === ACTION_STATE.IDLE
+      || this.scene.actionState === ACTION_STATE.JUMPING
+      || this.scene.actionState === ACTION_STATE.SWITCHING
+    );
   }
 
   handleLaneSwitchInput(direction) {
@@ -71,6 +95,7 @@ export class PlayerController {
 
   switchLane(direction) {
     const newLane = this.scene.currentLane + direction;
+
     if (newLane < 0 || newLane > 2 || !this.scene.cowboy) return;
 
     const preserveJumpState = this.scene.actionState === ACTION_STATE.JUMPING || this.scene.isJumpInProgress;
@@ -93,11 +118,16 @@ export class PlayerController {
         if (this.scene.inputBuffer !== null) {
           const bufferedDirection = this.scene.inputBuffer;
           this.scene.inputBuffer = null;
-          this.switchLane(bufferedDirection);
+          const didStartBufferedSwitch = this.switchLane(bufferedDirection);
+          if (!didStartBufferedSwitch && this.scene.actionState === ACTION_STATE.SWITCHING) {
+            this.scene.actionState = preserveJumpState && this.scene.isJumpInProgress ? ACTION_STATE.JUMPING : ACTION_STATE.IDLE;
+          }
           return;
         }
 
-        this.scene.actionState = preserveJumpState && this.scene.isJumpInProgress ? ACTION_STATE.JUMPING : ACTION_STATE.IDLE;
+        if (this.scene.actionState === ACTION_STATE.SWITCHING) {
+          this.scene.actionState = preserveJumpState && this.scene.isJumpInProgress ? ACTION_STATE.JUMPING : ACTION_STATE.IDLE;
+        }
       },
     });
 
@@ -109,15 +139,32 @@ export class PlayerController {
         ease: "Sine.easeInOut",
       });
     }
+
+    return true;
   }
 
   jump() {
-    if (!this.scene.cowboy || this.scene.actionState !== ACTION_STATE.IDLE) return;
+    if (!this.scene.cowboy) return;
+
+    const canStartPrimaryJump = this.scene.actionState === ACTION_STATE.IDLE && !this.scene.isJumpInProgress;
+    const canTriggerDoubleJump = this.scene.isJumpInProgress && this.jumpChainCount === 1;
+    if (!canStartPrimaryJump && !canTriggerDoubleJump) return;
+
+    this.jumpChainCount += 1;
+
+    if (this.activeJumpTween) {
+      this.activeJumpTween.stop();
+      this.activeJumpTween = null;
+    }
+    if (this.activeShadowJumpTween) {
+      this.activeShadowJumpTween.stop();
+      this.activeShadowJumpTween = null;
+    }
 
     this.scene.isJumpInProgress = true;
     this.scene.actionState = ACTION_STATE.JUMPING;
 
-    this.scene.tweens.add({
+    this.activeJumpTween = this.scene.tweens.add({
       targets: this.scene.cowboy,
       scaleX: this.scene.constants.BASE_SPRITE_SCALE * 1.15,
       scaleY: this.scene.constants.BASE_SPRITE_SCALE * 1.15,
@@ -125,7 +172,9 @@ export class PlayerController {
       yoyo: true,
       ease: "Quad.easeOut",
       onComplete: () => {
+        this.activeJumpTween = null;
         this.scene.isJumpInProgress = false;
+        this.jumpChainCount = 0;
         if (this.scene.actionState !== ACTION_STATE.SWITCHING) {
           this.scene.actionState = ACTION_STATE.IDLE;
         }
@@ -133,33 +182,34 @@ export class PlayerController {
     });
 
     if (this.scene.shadow) {
-      this.scene.tweens.add({
+      this.activeShadowJumpTween = this.scene.tweens.add({
         targets: this.scene.shadow,
-        scaleX: this.scene.constants.SHADOW_SCALE * 0.5,
-        scaleY: this.scene.constants.SHADOW_SCALE * 0.5,
-        alpha: 0.2,
-        y: this.scene.shadowBaseY - 8,
+        alpha: 0.35,
+        y: this.scene.shadowBaseY + 40,
         duration: this.scene.constants.JUMP_DURATION / 2,
         yoyo: true,
         ease: "Quad.easeOut",
+        onComplete: () => {
+          this.activeShadowJumpTween = null;
+        },
       });
     }
   }
 
   quickDraw() {
-    if (!this.scene.cowboy || this.scene.actionState !== ACTION_STATE.IDLE) return;
+    if (!this.scene.cowboy || !this.canUseActionWhileMoving()) return;
 
     if (this.scene.ammoCount <= 0) {
       this.scene.cameras?.main?.shake(70, 0.004);
       this.scene.tweens.add({
         targets: this.scene.cowboy,
-        x: this.scene.cowboy.x + 2,
+        angle: this.scene.cowboy.angle + 6,
         duration: 40,
         yoyo: true,
         repeat: 2,
         onComplete: () => {
           if (this.scene.cowboy) {
-            this.scene.cowboy.x = this.scene.lanes[this.scene.currentLane];
+            this.scene.cowboy.angle = 0;
           }
         },
       });
@@ -206,29 +256,33 @@ export class PlayerController {
       if (this.scene.anims.exists("gallop")) {
         this.scene.cowboy.play("gallop", true);
       }
-      this.scene.actionState = ACTION_STATE.IDLE;
+      if (this.scene.isJumpInProgress) {
+        this.scene.actionState = ACTION_STATE.JUMPING;
+      } else {
+        this.scene.actionState = ACTION_STATE.IDLE;
+      }
     });
   }
 
   throwLasso() {
-    if (this.scene.actionState !== ACTION_STATE.IDLE || !this.scene.cowboy) return;
+    if (!this.canUseActionWhileMoving() || !this.scene.cowboy) return;
 
     const rabbit = this.scene.spawnerSystem?.findNearestRabbit(this.scene.cowboy.x, this.scene.cowboy.y);
     if (!rabbit) return;
 
     this.scene.actionState = ACTION_STATE.LASSOING;
 
-    const originX = this.scene.cowboy.x;
+    const baseAngle = this.scene.cowboy.angle;
     this.scene.tweens.add({
       targets: this.scene.cowboy,
-      x: originX + 2,
+      angle: baseAngle + 6,
       duration: 50,
       yoyo: true,
       repeat: 7,
       ease: "Sine.easeInOut",
       onComplete: () => {
         if (this.scene.cowboy) {
-          this.scene.cowboy.x = this.scene.lanes[this.scene.currentLane];
+          this.scene.cowboy.angle = 0;
         }
       },
     });
@@ -280,7 +334,12 @@ export class PlayerController {
         const caught = this.scene.spawnerSystem?.handleRabbitCaught(rabbit);
 
         if (caught) {
-          EventBus.emit(EVENTS.SCORE_UPDATED, { score: this.scene.score, ammo: this.scene.ammoCount });
+          EventBus.emit(EVENTS.SCORE_UPDATED, {
+            score: this.scene.score,
+            ammo: this.scene.ammoCount,
+            rabbitsCollected: Number(this.scene.rabbitsCollected || 0),
+            coinsCollected: Number(this.scene.coinsCollected || 0),
+          });
 
           const savedSpeed = this.scene.gameSpeed;
           this.scene.gameSpeed = Math.max(120, this.scene.gameSpeed * 0.3);
@@ -321,7 +380,11 @@ export class PlayerController {
       if (this.scene.anims.exists("gallop")) {
         this.scene.cowboy.play("gallop", true);
       }
-      this.scene.actionState = ACTION_STATE.IDLE;
+      if (this.scene.isJumpInProgress) {
+        this.scene.actionState = ACTION_STATE.JUMPING;
+      } else {
+        this.scene.actionState = ACTION_STATE.IDLE;
+      }
     });
   }
 }

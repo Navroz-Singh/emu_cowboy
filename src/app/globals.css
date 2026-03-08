@@ -15,8 +15,15 @@
   --font-sans: var(--font-pixel);
 }
 
+html {
+  background-image: url("/images/emu_bg.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
 body {
-  background: var(--cabinet-tan);
+  background: transparent;
   color: var(--border-brown);
   font-family: var(--font-pixel), sans-serif;
   margin: 0;

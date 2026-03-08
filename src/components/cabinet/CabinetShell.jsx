@@ -1,6 +1,6 @@
 export default function CabinetShell({ children }) {
   return (
-    <div className="cabinet-lines relative h-[100dvh] overflow-hidden bg-(--cabinet-tan) px-2 py-2 md:px-3 md:py-3">
+    <div className="cabinet-lines relative h-[100dvh] overflow-hidden px-2 py-2 md:px-3 md:py-3">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-5 top-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />
         <div className="absolute right-5 top-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />

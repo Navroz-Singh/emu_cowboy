@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +27,7 @@ export default function PlayClient({ gameId, user }) {
   const [bootMilestoneIndex, setBootMilestoneIndex] = useState(0);
   const [isRevealVisible, setIsRevealVisible] = useState(false);
   const [isRevealExpanded, setIsRevealExpanded] = useState(false);
+  const hasRunInitialReveal = useRef(false);
 
   const bootMilestones = ["PREPARING CARTRIDGE...", "LOADING ASSETS...", "BOOTING..."];
 
@@ -52,15 +53,25 @@ export default function PlayClient({ gameId, user }) {
 
   useEffect(() => {
     if (!hasStartedFromMenu) return;
+    if (hasRunInitialReveal.current) return;
 
     const bootStepOne = window.setTimeout(() => setBootMilestoneIndex(1), 350);
     const bootStepTwo = window.setTimeout(() => setBootMilestoneIndex(2), 900);
     let revealStartTimeoutId;
     let revealEndTimeoutId;
+    let revealStarted = false;
 
     const onGameReady = () => {
+      if (revealStarted || hasRunInitialReveal.current) return;
+      revealStarted = true;
+      hasRunInitialReveal.current = true;
+
+      setPaused(true);
+      EventBus.emit(EVENTS.SYSTEM_PAUSE);
+
       setIsBooting(false);
       setIsRevealVisible(true);
+      setIsRevealExpanded(false);
       revealStartTimeoutId = window.setTimeout(() => {
         setIsRevealExpanded(true);
       }, 20);
@@ -68,6 +79,8 @@ export default function PlayClient({ gameId, user }) {
       revealEndTimeoutId = window.setTimeout(() => {
         setIsRevealExpanded(false);
         setIsRevealVisible(false);
+        setPaused(false);
+        EventBus.emit(EVENTS.SYSTEM_RESUME);
       }, 700);
     };
 
@@ -80,7 +93,7 @@ export default function PlayClient({ gameId, user }) {
       if (revealEndTimeoutId) window.clearTimeout(revealEndTimeoutId);
       EventBus.off(EVENTS.GAME_READY, onGameReady);
     };
-  }, [gameId, hasStartedFromMenu]);
+  }, [gameId, hasStartedFromMenu, setPaused]);
 
   if (!cartridge) return null;
 
@@ -113,13 +126,15 @@ export default function PlayClient({ gameId, user }) {
 
   const startGameFromMenu = () => {
     if (hasStartedFromMenu) return;
+    setPaused(true);
+    EventBus.emit(EVENTS.SYSTEM_PAUSE);
     setIsBooting(true);
     setBootMilestoneIndex(0);
     setHasStartedFromMenu(true);
   };
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-black">
+    <div className="relative h-dvh w-full overflow-hidden bg-(--cabinet-tan)">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-100 flex items-center justify-between p-3">
         <button
           className="pointer-events-auto arcade-border bg-(--cabinet-tan) px-3 py-2 text-[10px] md:text-xs"

@@ -116,13 +116,13 @@ CREATE INDEX "score_log_userId_gameId_createdAt_idx" ON "score_log"("userId", "g
 CREATE INDEX "score_log_gameId_createdAt_idx" ON "score_log"("gameId", "createdAt" DESC);
 
 -- CreateIndex
+CREATE UNIQUE INDEX "leaderboard_entry_userId_gameId_key" ON "leaderboard_entry"("userId", "gameId");
+
+-- CreateIndex
 CREATE INDEX "leaderboard_entry_gameId_value_idx" ON "leaderboard_entry"("gameId", "value" DESC);
 
 -- CreateIndex
 CREATE INDEX "leaderboard_entry_gameId_countryCode_value_idx" ON "leaderboard_entry"("gameId", "countryCode", "value" DESC);
-
--- CreateIndex
-CREATE UNIQUE INDEX "leaderboard_entry_userId_gameId_key" ON "leaderboard_entry"("userId", "gameId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "game_save_userId_gameId_key" ON "game_save"("userId", "gameId");

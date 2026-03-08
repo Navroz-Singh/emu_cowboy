@@ -7,19 +7,21 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  emailVerified Boolean
-  image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
-
-  sessions           Session[]
+  id                 String             @id @default(cuid())
+  name               String
+  email              String             @unique
+  emailVerified      Boolean
+  image              String?
+  createdAt          DateTime
+  updatedAt          DateTime
   accounts           Account[]
-  scores             ScoreLog[]
-  leaderboardEntries LeaderboardEntry[]
   gameSaves          GameSave[]
+  leaderboardEntries LeaderboardEntry[]
+  communityComments  CommunityComment[]
+  communityPosts     CommunityPost[]
+  communityReactions CommunityReaction[]
+  scores             ScoreLog[]
+  sessions           Session[]
   stats              UserStat?
 
   @@map("user")
@@ -44,7 +46,6 @@ model Account {
   accountId             String
   providerId            String
   userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -54,6 +55,7 @@ model Account {
   password              String?
   createdAt             DateTime
   updatedAt             DateTime
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -75,10 +77,9 @@ model ScoreLog {
   gameId      String
   value       Int
   countryCode String   @db.Char(2)
-  meta        Json?
   createdAt   DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meta        Json?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, gameId, createdAt(sort: Desc)])
   @@index([gameId, createdAt(sort: Desc)])
@@ -92,8 +93,7 @@ model LeaderboardEntry {
   value       Int
   countryCode String   @db.Char(2)
   achievedAt  DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameId])
   @@index([gameId, value(sort: Desc)])
@@ -102,16 +102,15 @@ model LeaderboardEntry {
 }
 
 model UserStat {
-  userId          String   @id
-  totalScore      BigInt   @default(0)
-  gamesPlayed     Int      @default(0)
-  totalTimePlayed Int      @default(0)
-  totalRabbitsCollected Int @default(0)
-  totalCoinsCollected   Int @default(0)
-  lastPlayedGame  String?
-  updatedAt       DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String   @id
+  totalScore            BigInt   @default(0)
+  gamesPlayed           Int      @default(0)
+  totalTimePlayed       Int      @default(0)
+  lastPlayedGame        String?
+  updatedAt             DateTime @updatedAt
+  totalCoinsCollected   Int      @default(0)
+  totalRabbitsCollected Int      @default(0)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_stat")
 }
@@ -122,9 +121,57 @@ model GameSave {
   gameId    String
   state     Json
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameId])
   @@map("game_save")
+}
+
+model CommunityPost {
+  id            String              @id @default(cuid())
+  userId        String
+  gameId        String
+  title         String
+  content       String
+  likesCount    Int                 @default(0)
+  dislikesCount Int                 @default(0)
+  commentsCount Int                 @default(0)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments      CommunityComment[]
+  reactions     CommunityReaction[]
+
+  @@index([gameId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("community_post")
+}
+
+model CommunityComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt(sort: Desc)])
+  @@map("community_comment")
+}
+
+model CommunityReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId, value])
+  @@map("community_reaction")
 }

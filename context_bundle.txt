@@ -1,0 +1,1935 @@
+// FILE: /src\app\page.js
+import ArcadeScreenClient from "@/components/ArcadeScreenClient";
+import CabinetShell from "@/components/cabinet/CabinetShell";
+import ScreenFrame from "@/components/cabinet/ScreenFrame";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { headers } from "next/headers";
+
+export default async function Home() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user ?? null;
+  const rawUserStat = user
+    ? await prisma.userStat.findUnique({
+        where: { userId: user.id },
+      })
+    : null;
+  const rawUserMaxScore = user
+    ? await prisma.leaderboardEntry.aggregate({
+        where: { userId: user.id },
+        _max: { value: true },
+      })
+    : null;
+
+  const userStat = rawUserStat
+    ? {
+        totalScore: rawUserStat.totalScore.toString(),
+        gamesPlayed: rawUserStat.gamesPlayed,
+        totalTimePlayed: rawUserStat.totalTimePlayed,
+        totalRabbitsCollected: rawUserStat.totalRabbitsCollected,
+        totalCoinsCollected: rawUserStat.totalCoinsCollected,
+        lastPlayedGame: rawUserStat.lastPlayedGame,
+        maxScore: rawUserMaxScore?._max?.value ?? 0,
+      }
+    : null;
+
+  return (
+    <CabinetShell>
+      <ScreenFrame user={user}>
+        <ArcadeScreenClient user={user} userStat={userStat} />
+      </ScreenFrame>
+    </CabinetShell>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\auth\AuthModal.jsx
+"use client";
+
+import LoginForm from "@/components/auth/LoginForm";
+import RegisterForm from "@/components/auth/RegisterForm";
+import { useArcadeStore } from "@/store/arcadeStore";
+
+export default function AuthModal() {
+  const isAuthModalOpen = useArcadeStore((state) => state.isAuthModalOpen);
+  const authMode = useArcadeStore((state) => state.authMode);
+  const closeAuthModal = useArcadeStore((state) => state.closeAuthModal);
+
+  if (!isAuthModalOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/45 p-4">
+      <div className="arcade-border max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto bg-[var(--cabinet-tan)] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="saloon-title text-lg text-[var(--title-red)] md:text-2xl">
+            {authMode === "register" ? "REGISTER" : "LOGIN"}
+          </h3>
+          <button
+            className="rounded border-2 border-[var(--border-brown)] bg-[var(--screen-bg)] px-2 py-1 text-[9px]"
+            onClick={closeAuthModal}
+            type="button"
+          >
+            CLOSE
+          </button>
+        </div>
+
+        {authMode === "register" ? <RegisterForm /> : <LoginForm />}
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\auth\LoginForm.jsx
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { useDebounce } from "@/hooks/useDebounce";
+import { authClient } from "@/lib/auth-client";
+import { migrateLocalDataToServer } from "@/lib/persistence";
+import { useArcadeStore } from "@/store/arcadeStore";
+
+export default function LoginForm() {
+  const router = useRouter();
+  const closeAuthModal = useArcadeStore((state) => state.closeAuthModal);
+  const setAuthMode = useArcadeStore((state) => state.setAuthMode);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const debouncedEmail = useDebounce(email, 300);
+  const debouncedPassword = useDebounce(password, 300);
+
+  const validationError = useMemo(() => {
+    if (!debouncedEmail && !debouncedPassword) return "";
+    if (!/^\S+@\S+\.\S+$/.test(debouncedEmail)) return "Enter a valid email address.";
+    if (debouncedPassword.length < 8) return "Password must be at least 8 characters.";
+    return "";
+  }, [debouncedEmail, debouncedPassword]);
+
+  const canSubmit = useMemo(
+    () => Boolean(email && password) && !validationError && !isSubmitting,
+    [email, password, validationError, isSubmitting],
+  );
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    const { data, error } = await authClient.signIn.email({
+      email,
+      password,
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setErrorMessage(error.message || "Unable to sign in.");
+      return;
+    }
+
+    try {
+      const sessionUser = data?.user ?? (await authClient.getSession())?.data?.user ?? null;
+      await migrateLocalDataToServer(sessionUser);
+    } catch {}
+
+    closeAuthModal();
+    router.refresh();
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs" htmlFor="email">EMAIL</label>
+        <input
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
+          id="email"
+          onChange={(event) => setEmail(event.target.value)}
+          required
+          type="email"
+          value={email}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs" htmlFor="password">PASSWORD</label>
+        <input
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
+          id="password"
+          minLength={8}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          type="password"
+          value={password}
+        />
+      </div>
+
+      {validationError ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{validationError}</p> : null}
+      {errorMessage ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{errorMessage}</p> : null}
+
+      <button
+        className={[
+          "pixel-button w-full px-3 py-2 text-[10px] md:text-xs",
+          isSubmitting ? "loading-blink" : "",
+        ].join(" ")}
+        disabled={!canSubmit}
+        type="submit"
+      >
+        {isSubmitting ? "SIGNING IN..." : "SIGN IN"}
+      </button>
+
+      <button
+        className="w-full text-[9px] text-(--border-brown)/80 underline md:text-[10px]"
+        disabled={isSubmitting}
+        onClick={() => setAuthMode("register")}
+        type="button"
+      >
+        NEED AN ACCOUNT? REGISTER
+      </button>
+    </form>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\auth\RegisterForm.jsx
+"use client";
+
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+import { useDebounce } from "@/hooks/useDebounce";
+import { authClient } from "@/lib/auth-client";
+import { migrateLocalDataToServer } from "@/lib/persistence";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { AVATARS } from "@/utils/constants";
+
+export default function RegisterForm() {
+  const router = useRouter();
+  const closeAuthModal = useArcadeStore((state) => state.closeAuthModal);
+  const setAuthMode = useArcadeStore((state) => state.setAuthMode);
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const debouncedName = useDebounce(name, 300);
+  const debouncedEmail = useDebounce(email, 300);
+  const debouncedPassword = useDebounce(password, 300);
+
+  const validationError = useMemo(() => {
+    if (!debouncedName && !debouncedEmail && !debouncedPassword) return "";
+    if (debouncedName.trim().length < 2) return "Username must be at least 2 characters.";
+    if (!/^\S+@\S+\.\S+$/.test(debouncedEmail)) return "Enter a valid email address.";
+    if (debouncedPassword.length < 8) return "Password must be at least 8 characters.";
+    return "";
+  }, [debouncedEmail, debouncedName, debouncedPassword]);
+
+  const canSubmit = useMemo(
+    () => Boolean(name && email && password) && !validationError && !isSubmitting,
+    [name, email, password, validationError, isSubmitting],
+  );
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    const { data, error } = await authClient.signUp.email({
+      email,
+      image: selectedAvatar,
+      name,
+      password,
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setErrorMessage(error.message || "Unable to register.");
+      return;
+    }
+
+    try {
+      const sessionUser = data?.user ?? (await authClient.getSession())?.data?.user ?? null;
+      await migrateLocalDataToServer(sessionUser);
+    } catch {}
+
+    closeAuthModal();
+    router.refresh();
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs" htmlFor="register-name">USERNAME</label>
+        <input
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
+          id="register-name"
+          onChange={(event) => setName(event.target.value)}
+          required
+          type="text"
+          value={name}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs" htmlFor="register-email">EMAIL</label>
+        <input
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
+          id="register-email"
+          onChange={(event) => setEmail(event.target.value)}
+          required
+          type="email"
+          value={email}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs" htmlFor="register-password">PASSWORD</label>
+        <input
+          className="arcade-border w-full bg-background px-2 py-2 text-[10px] md:text-xs"
+          id="register-password"
+          minLength={8}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          type="password"
+          value={password}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[10px] md:text-xs">SELECT AVATAR</p>
+        <div className="grid grid-cols-5 gap-2">
+          {AVATARS.map((avatarSrc) => {
+            const isSelected = avatarSrc === selectedAvatar;
+
+            return (
+              <button
+                key={avatarSrc}
+                className={[
+                  "arcade-border relative aspect-square overflow-hidden",
+                  isSelected ? "glow-gold" : "",
+                ].join(" ")}
+                disabled={isSubmitting}
+                onClick={() => setSelectedAvatar(avatarSrc)}
+                type="button"
+              >
+                <Image alt="Avatar option" className="object-cover" fill src={avatarSrc} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {validationError ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{validationError}</p> : null}
+      {errorMessage ? <p className="text-[9px] text-(--title-red) md:text-[10px]">{errorMessage}</p> : null}
+
+      <button
+        className={[
+          "pixel-button w-full px-3 py-2 text-[10px] md:text-xs",
+          isSubmitting ? "loading-blink" : "",
+        ].join(" ")}
+        disabled={!canSubmit}
+        type="submit"
+      >
+        {isSubmitting ? "CREATING ACCOUNT..." : "REGISTER"}
+      </button>
+
+      <button
+        className="w-full text-[9px] text-(--border-brown)/80 underline md:text-[10px]"
+        disabled={isSubmitting}
+        onClick={() => setAuthMode("login")}
+        type="button"
+      >
+        ALREADY HAVE AN ACCOUNT? SIGN IN
+      </button>
+    </form>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\cabinet\CabinetShell.jsx
+export default function CabinetShell({ children }) {
+  return (
+    <div className="cabinet-lines relative h-[100dvh] overflow-hidden bg-(--cabinet-tan) px-2 py-2 md:px-3 md:py-3">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-5 top-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />
+        <div className="absolute right-5 top-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />
+        <div className="absolute bottom-5 left-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />
+        <div className="absolute bottom-5 right-5 h-3 w-3 rounded-full bg-(--border-brown)/40" />
+        <div className="absolute bottom-5 right-9 h-2 w-2 rotate-45 bg-white/70 shadow-[0_0_10px_2px_rgba(255,255,255,0.6)]" />
+        <div className="dust-mote absolute bottom-16 left-6 h-2 w-2" />
+        <div className="dust-mote absolute bottom-20 right-8 h-1.5 w-1.5 [animation-delay:300ms]" />
+        <div className="dust-mote absolute top-16 left-10 h-1.5 w-1.5 [animation-delay:700ms]" />
+      </div>
+      <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1450px] items-center justify-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\cabinet\ScreenFrame.jsx
+import GameCarousel from "@/components/ui/GameCarousel";
+import Navbar from "@/components/ui/Navbar";
+
+export default function ScreenFrame({ user, children }) {
+  return (
+    <div className="h-full w-full overflow-hidden rounded-2xl border-[8px] border-[var(--border-brown)] bg-[var(--screen-bg)] p-1.5 shadow-[0_0_0_3px_var(--border-inner)_inset] md:p-2">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1360px] flex-col gap-1.5 rounded-xl border-[4px] border-[var(--border-brown)] bg-[var(--screen-bg)] p-1.5 md:gap-2 md:p-2">
+        <Navbar user={user} />
+        <div className="arcade-border min-h-0 flex-1 overflow-y-auto overflow-x-auto bg-[var(--screen-bg)] p-2 md:p-4">{children}</div>
+        <GameCarousel />
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\emulator\GameWrapper.jsx
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { AUTO, Game, Scale } from "phaser";
+
+import { GAME_REGISTRY } from "@/games/registry";
+
+export default function GameWrapper({ gameId, width = 800, height = 600 }) {
+  const containerRef = useRef(null);
+  const gameRef = useRef(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initGame() {
+      try {
+        const cartridge = GAME_REGISTRY[gameId];
+
+        if (!cartridge?.sceneImporter || !isMounted || gameRef.current || !containerRef.current) {
+          return;
+        }
+
+        const scenes = await cartridge.sceneImporter();
+        if (!isMounted) return;
+
+        const config = {
+          type: AUTO,
+          parent: containerRef.current,
+          width,
+          height,
+          scale: {
+            mode: Scale.FIT,
+            autoCenter: Scale.CENTER_BOTH,
+            width,
+            height,
+          },
+          ...cartridge.config,
+          scene: scenes,
+        };
+
+        gameRef.current = new Game(config);
+      } catch {
+        setError("Unable to initialize game cartridge.");
+      }
+    }
+
+    initGame();
+
+    return () => {
+      isMounted = false;
+
+      if (gameRef.current) {
+        gameRef.current.destroy(true);
+        gameRef.current = null;
+      }
+    };
+  }, [gameId, width, height]);
+
+  return (
+    <div className="arcade-border relative h-full w-full overflow-hidden bg-(--screen-bg)/65">
+      {error ? (
+        <div className="arcade-border absolute left-3 top-3 z-10 bg-(--cabinet-tan) px-3 py-2 text-[10px] text-(--title-red)">
+          {error}
+        </div>
+      ) : null}
+      <div className="h-full w-full" ref={containerRef} />
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\emulator\SystemOverlay.jsx
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+
+import { EventBus, EVENTS } from "@/lib/eventBus";
+import { saveGameState, submitScore } from "@/lib/persistence";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { useEmulatorStore } from "@/store/emulatorStore";
+
+export default function SystemOverlay({ gameId, gameTitle, user }) {
+  const router = useRouter();
+  const saveStatusTimeoutRef = useRef(null);
+  const gameOverShownAtRef = useRef(0);
+
+  const [saveStatus, setSaveStatus] = useState("");
+  const [isGameOverVisible, setIsGameOverVisible] = useState(false);
+  const [isLeavingHome, setIsLeavingHome] = useState(false);
+  const [finalRunStats, setFinalRunStats] = useState({ rabbitsCollected: 0, coinsCollected: 0 });
+
+  const isPaused = useEmulatorStore((state) => state.isPaused);
+  const score = useEmulatorStore((state) => state.score);
+  const highScore = useEmulatorStore((state) => state.highScore);
+  const ammoCount = useEmulatorStore((state) => state.ammoCount);
+  const rabbitsCollected = useEmulatorStore((state) => state.rabbitsCollected);
+  const coinsCollected = useEmulatorStore((state) => state.coinsCollected);
+  const togglePause = useEmulatorStore((state) => state.togglePause);
+  const setPaused = useEmulatorStore((state) => state.setPaused);
+  const setScore = useEmulatorStore((state) => state.setScore);
+  const setAmmo = useEmulatorStore((state) => state.setAmmo);
+  const setRabbitsCollected = useEmulatorStore((state) => state.setRabbitsCollected);
+  const setCoinsCollected = useEmulatorStore((state) => state.setCoinsCollected);
+  const reset = useEmulatorStore((state) => state.reset);
+
+  const openAuthModal = useArcadeStore((state) => state.openAuthModal);
+
+  const formattedScore = useMemo(() => score.toLocaleString(), [score]);
+  const formattedHighScore = useMemo(() => highScore.toLocaleString(), [highScore]);
+
+  useEffect(() => {
+    const onScoreUpdated = ({ score: nextScore, ammo, rabbitsCollected: nextRabbitsCollected, coinsCollected: nextCoinsCollected }) => {
+      setScore(nextScore);
+      if (ammo !== undefined) setAmmo(ammo);
+      if (nextRabbitsCollected !== undefined) setRabbitsCollected(nextRabbitsCollected);
+      if (nextCoinsCollected !== undefined) setCoinsCollected(nextCoinsCollected);
+    };
+
+    const onPlayerDied = async ({ score: finalScore, timePlayed, rabbitsCollected = 0, coinsCollected = 0 }) => {
+      setScore(finalScore);
+      setRabbitsCollected(rabbitsCollected);
+      setCoinsCollected(coinsCollected);
+      setFinalRunStats({ rabbitsCollected, coinsCollected });
+      setPaused(true);
+      EventBus.emit(EVENTS.SYSTEM_PAUSE);
+      gameOverShownAtRef.current = Date.now();
+      setIsGameOverVisible(true);
+      await submitScore(gameId, finalScore, user, timePlayed, { rabbitsCollected, coinsCollected });
+    };
+
+    const onSaveRequested = async ({ state }) => {
+      setSaveStatus("saving");
+
+      try {
+        await saveGameState(gameId, state, user);
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus("error");
+      }
+
+      if (saveStatusTimeoutRef.current) {
+        window.clearTimeout(saveStatusTimeoutRef.current);
+      }
+
+      saveStatusTimeoutRef.current = window.setTimeout(() => {
+        setSaveStatus("");
+        saveStatusTimeoutRef.current = null;
+      }, 900);
+    };
+
+    EventBus.on(EVENTS.SCORE_UPDATED, onScoreUpdated);
+    EventBus.on(EVENTS.PLAYER_DIED, onPlayerDied);
+    EventBus.on(EVENTS.SAVE_REQUESTED, onSaveRequested);
+
+    return () => {
+      EventBus.off(EVENTS.SCORE_UPDATED, onScoreUpdated);
+      EventBus.off(EVENTS.PLAYER_DIED, onPlayerDied);
+      EventBus.off(EVENTS.SAVE_REQUESTED, onSaveRequested);
+
+      if (saveStatusTimeoutRef.current) {
+        window.clearTimeout(saveStatusTimeoutRef.current);
+        saveStatusTimeoutRef.current = null;
+      }
+    };
+  }, [gameId, setAmmo, setCoinsCollected, setPaused, setRabbitsCollected, setScore, user]);
+
+  const handlePauseToggle = () => {
+    const nextPaused = togglePause();
+
+    if (nextPaused) {
+      EventBus.emit(EVENTS.SYSTEM_PAUSE);
+      return;
+    }
+
+    EventBus.emit(EVENTS.SYSTEM_RESUME);
+  };
+
+  const handlePlayAgain = () => {
+    const elapsedSinceGameOver = Date.now() - Number(gameOverShownAtRef.current || 0);
+    if (elapsedSinceGameOver < 300) return;
+
+    setIsLeavingHome(false);
+    reset();
+    setFinalRunStats({ rabbitsCollected: 0, coinsCollected: 0 });
+    setIsGameOverVisible(false);
+    setPaused(false);
+    EventBus.emit(EVENTS.SYSTEM_RESUME);
+    EventBus.emit(EVENTS.GAME_RESTART);
+  };
+
+  const handleGoHome = () => {
+    if (isLeavingHome) return;
+    setIsLeavingHome(true);
+    setPaused(true);
+    EventBus.emit(EVENTS.SYSTEM_PAUSE);
+    router.push("/");
+  };
+
+  const gameOverModal = isGameOverVisible ? (
+    <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/45 p-3">
+      <div className="arcade-border w-full max-w-sm bg-(--cabinet-tan) p-4 text-center">
+        <h3 className="saloon-title text-2xl text-(--title-red)">GAME OVER</h3>
+        <p className="mt-3 text-[10px] md:text-xs">FINAL SCORE</p>
+        <p className="mt-1 text-xl text-(--accent-gold)">{formattedScore}</p>
+        <p className="mt-2 text-[10px] md:text-xs">RABBITS: {Number(finalRunStats.rabbitsCollected || 0)}</p>
+        <p className="text-[10px] md:text-xs">COINS: {Number(finalRunStats.coinsCollected || 0)}</p>
+
+        <div className="mt-4 space-y-2">
+          <button className="pixel-button w-full px-3 py-2 text-[10px] md:text-xs" onClick={handlePlayAgain} type="button">
+            PLAY AGAIN
+          </button>
+          <button
+            className="arcade-border w-full bg-background px-3 py-2 text-[10px] md:text-xs"
+            disabled={isLeavingHome}
+            onClick={handleGoHome}
+            type="button"
+          >
+            {isLeavingHome ? "LEAVING..." : "HOME"}
+          </button>
+          {!user ? (
+            <button
+              className="arcade-border w-full bg-background px-3 py-2 text-[10px] md:text-xs"
+              onClick={() => openAuthModal("login")}
+              type="button"
+            >
+              LOG IN TO SAVE SCORE
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <div className="pointer-events-none absolute inset-0 z-20">
+        <div className="flex items-start justify-between p-3 text-[10px] md:text-xs">
+          <div className="arcade-border bg-(--cabinet-tan)/90 px-2 py-2">
+            <p>{gameTitle.toUpperCase()}</p>
+            <p className="mt-1">SCORE: {formattedScore}</p>
+            <p>HIGH: {formattedHighScore}</p>
+            <p>AMMO: {ammoCount}</p>
+            <p>RABBITS: {rabbitsCollected}</p>
+            <p>COINS: {coinsCollected}</p>
+          </div>
+
+          <div className="pointer-events-auto flex items-center gap-2">
+            {saveStatus ? (
+              <div className="arcade-border bg-(--cabinet-tan)/90 px-2 py-1 text-[9px] md:text-[10px]">
+                {saveStatus === "saving" ? "SAVING" : saveStatus === "saved" ? "SAVED" : "SAVE FAILED"}
+              </div>
+            ) : null}
+            <button
+              className="arcade-border bg-(--cabinet-tan)/90 px-2 py-1 text-[9px] md:text-[10px]"
+              onClick={handlePauseToggle}
+              type="button"
+            >
+              {isPaused ? "RESUME" : "PAUSE"}
+            </button>
+          </div>
+        </div>
+      </div>
+      {typeof document !== "undefined" ? createPortal(gameOverModal, document.body) : null}
+    </>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\ui\GameCarousel.jsx
+"use client";
+
+import { useMemo } from "react";
+
+import GameCarouselIcon from "@/components/ui/GameCarouselIcon";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { GAMES } from "@/utils/constants";
+
+export default function GameCarousel() {
+  const selectedGameId = useArcadeStore((state) => state.selectedGameId);
+  const setSelectedGame = useArcadeStore((state) => state.setSelectedGame);
+
+  const gameList = useMemo(() => GAMES, []);
+
+  return (
+    <div className="arcade-border relative overflow-hidden bg-[var(--cabinet-tan)]/50 px-3 py-2">
+      <div className="pointer-events-none absolute inset-y-2 left-2 hidden w-32 md:block">
+        <div className="tumbleweed absolute bottom-1 left-0 h-3 w-3" />
+        <div className="tumbleweed absolute bottom-2 left-6 h-2.5 w-2.5 [animation-duration:10s] [animation-delay:500ms]" />
+      </div>
+      <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-32 md:block">
+        <div className="tumbleweed absolute bottom-1 right-0 h-3 w-3 [animation-duration:9s]" />
+        <div className="tumbleweed absolute bottom-2 right-8 h-2.5 w-2.5 [animation-duration:11s] [animation-delay:800ms]" />
+      </div>
+      <div className="relative flex items-center justify-center gap-2 md:gap-4">
+        {gameList.map((game) => (
+          <GameCarouselIcon
+            key={game.id}
+            isSelected={game.id === selectedGameId}
+            onSelect={() => setSelectedGame(game.id)}
+            src={game.src}
+            title={game.title}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\ui\GameCarouselIcon.jsx
+import { memo } from "react";
+import Image from "next/image";
+
+function GameCarouselIconComponent({ title, src, isSelected, onSelect }) {
+  return (
+    <button
+      className="flex flex-col items-center gap-1 transition-transform duration-150 hover:-translate-y-0.5"
+      onClick={onSelect}
+      type="button"
+    >
+      <span
+        className={[
+          "arcade-border relative h-12 w-12 overflow-hidden rounded-md bg-[var(--cabinet-tan)] md:h-14 md:w-14",
+          isSelected ? "glow-gold" : "",
+        ].join(" ")}
+      >
+        <Image alt={title} className="h-full w-full object-cover" height={56} src={src} width={56} />
+      </span>
+      <span className="text-[8px] text-[var(--border-brown)] md:text-[9px]">{title}</span>
+    </button>
+  );
+}
+
+const GameCarouselIcon = memo(GameCarouselIconComponent);
+
+export default GameCarouselIcon;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\ui\Navbar.jsx
+"use client";
+
+import { memo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+import { authClient } from "@/lib/auth-client";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { AVATARS } from "@/utils/constants";
+import { TAB_LIST } from "@/utils/constants";
+
+function NavbarComponent({ user }) {
+  const router = useRouter();
+  const activeTab = useArcadeStore((state) => state.activeTab);
+  const setActiveTab = useArcadeStore((state) => state.setActiveTab);
+  const openAuthModal = useArcadeStore((state) => state.openAuthModal);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  const handleAuthAction = async () => {
+    if (isAuthLoading) return;
+
+    setIsAuthLoading(true);
+
+    if (!user) {
+      openAuthModal("login");
+      window.setTimeout(() => setIsAuthLoading(false), 150);
+      return;
+    }
+
+    try {
+      await authClient.signOut();
+      router.refresh();
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  return (
+    <header className="arcade-border flex items-center justify-between bg-[var(--cabinet-tan)]/60 p-2">
+      <nav className="flex items-end gap-1 text-[10px] md:text-[11px]">
+        {TAB_LIST.map((tab) => {
+          const isActive = tab.key === activeTab;
+
+          return (
+            <button
+              key={tab.key}
+              className={[
+                "rounded-t-md border-[3px] border-transparent px-2 py-2 leading-none transition-colors",
+                isActive
+                  ? "border-[var(--border-brown)] border-b-0 bg-[var(--cabinet-tan)] text-[var(--border-brown)]"
+                  : "text-[var(--border-brown)]/80 hover:bg-[var(--cabinet-tan)]/40",
+              ].join(" ")}
+              onClick={() => setActiveTab(tab.key)}
+              type="button"
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="flex items-center gap-2 text-[10px]">
+        <div className="arcade-border relative h-8 w-8 overflow-hidden bg-[var(--cabinet-tan)]">
+          <Image alt={user?.name ?? "Avatar"} className="object-cover" fill src={user?.image || AVATARS[0]} />
+        </div>
+        <span className="hidden md:inline">{user?.name ?? "USER123"}</span>
+        <button
+          className={[
+            "rounded-full border-2 border-[var(--border-brown)] bg-[var(--cabinet-tan)] px-3 py-1 text-[var(--border-brown)]",
+            isAuthLoading ? "loading-blink" : "",
+          ].join(" ")}
+          disabled={isAuthLoading}
+          onClick={handleAuthAction}
+          type="button"
+        >
+          {isAuthLoading ? (user ? "LOGGING OUT..." : "OPENING...") : user ? "LOGOUT" : "LOGIN"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+const Navbar = memo(NavbarComponent);
+
+export default Navbar;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\ui\PeepholeTransition.jsx
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function PeepholeTransition({ gameId, children, disabled = false, className = "", onClick }) {
+  const router = useRouter();
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [origin, setOrigin] = useState({ x: "50%", y: "50%" });
+
+  const clipPath = useMemo(
+    () => (isAnimating ? `circle(150% at ${origin.x} ${origin.y})` : `circle(0% at ${origin.x} ${origin.y})`),
+    [isAnimating, origin.x, origin.y],
+  );
+
+  const handleStart = (event) => {
+    if (disabled || isAnimating) return;
+
+    if (typeof onClick === "function") {
+      onClick(event);
+    }
+
+    const x = `${Math.round(event.clientX)}px`;
+    const y = `${Math.round(event.clientY)}px`;
+
+    setOrigin({ x, y });
+    setIsAnimating(true);
+
+    window.setTimeout(() => {
+      router.push(`/play/${gameId}`);
+    }, 600);
+  };
+
+  return (
+    <>
+      <button className={className} disabled={disabled || isAnimating} onClick={handleStart} type="button">
+        {children}
+      </button>
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-130 bg-foreground transition-[clip-path] duration-600 ease-out"
+        style={{ clipPath }}
+      />
+    </>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\views\AllGamesView.jsx
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+import { GAME_REGISTRY } from "@/games/registry";
+import { useLeaderboard } from "@/hooks/useLeaderboard";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { GAMES } from "@/utils/constants";
+
+export default function AllGamesView() {
+  const router = useRouter();
+  const selectedGameId = useArcadeStore((state) => state.selectedGameId);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [launchMilestoneIndex, setLaunchMilestoneIndex] = useState(0);
+  const milestoneTimeoutsRef = useRef([]);
+
+  const launchMilestones = ["PREPARING CARTRIDGE...", "LOADING ASSETS...", "BOOTING..."];
+
+  useEffect(() => {
+    return () => {
+      milestoneTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      milestoneTimeoutsRef.current = [];
+    };
+  }, []);
+
+  const selectedGame = useMemo(
+    () => GAMES.find((game) => game.id === selectedGameId) ?? GAMES[0],
+    [selectedGameId],
+  );
+
+  const registryGame = useMemo(() => GAME_REGISTRY[selectedGameId] ?? null, [selectedGameId]);
+  const { rows: leaderRows, isLoading: isLeadersLoading } = useLeaderboard(selectedGameId, { limit: 3 });
+
+  const handleLaunchPrep = () => {
+    if (isLaunching) return;
+
+    setIsLaunching(true);
+    setLaunchMilestoneIndex(0);
+
+    milestoneTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    milestoneTimeoutsRef.current = [];
+
+    milestoneTimeoutsRef.current.push(
+      window.setTimeout(() => setLaunchMilestoneIndex(1), 350),
+      window.setTimeout(() => setLaunchMilestoneIndex(2), 900),
+    );
+
+    const isPlayable = Boolean(registryGame?.config && registryGame?.sceneImporter);
+    if (isPlayable) {
+      router.push(`/play/${selectedGameId}`);
+      return;
+    }
+
+    router.push(`/coming-soon/${selectedGameId}`);
+  };
+
+  return (
+    <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[45%_55%]">
+      <div className="arcade-border bg-(--cabinet-tan)/40 p-3">
+        <div className="relative mx-auto aspect-square w-full max-w-105">
+          <Image
+            alt={registryGame?.title || selectedGame.title}
+            className="rounded-md border-2 border-(--border-brown)/50 object-cover"
+            fill
+            src={selectedGame.src}
+          />
+        </div>
+      </div>
+
+      <div className="flex h-full flex-col gap-3">
+        <h2 className="saloon-title text-3xl text-(--title-red) md:text-5xl">
+          {(registryGame?.title || selectedGame.title).toUpperCase()}
+        </h2>
+        <p className="text-[10px] leading-6 md:text-xs">
+          {registryGame?.description || selectedGame.shortDescription}
+        </p>
+        <button
+          className={[
+            "pixel-button w-full px-4 py-4 text-xs",
+            isLaunching ? "loading-blink" : "",
+          ].join(" ")}
+          disabled={isLaunching}
+          onClick={handleLaunchPrep}
+          type="button"
+        >
+          {isLaunching ? launchMilestones[launchMilestoneIndex] : "START / INSERT COIN"}
+        </button>
+        <div className="arcade-border mt-auto bg-(--cabinet-tan)/40 p-3 text-[10px] md:text-xs">
+          <p className="mb-2">GLOBAL LEADERS</p>
+          {isLeadersLoading ? <p className="loading-blink">LOADING...</p> : null}
+          {!isLeadersLoading && leaderRows.length === 0 ? <p>NO SCORES YET</p> : null}
+          <div className="space-y-1">
+            {leaderRows.map((row, index) => (
+              <div key={`${row.userId}-${row.rank}`} className="flex justify-between">
+                <span>{index + 1}. {(row.playerName || "UNKNOWN").toUpperCase()}</span>
+                <span>{Number(row.value || 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\views\CommunityView.jsx
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useArcadeStore } from "@/store/arcadeStore";
+import { GAMES } from "@/utils/constants";
+
+export default function CommunityView({ user }) {
+  const openAuthModal = useArcadeStore((state) => state.openAuthModal);
+
+  const [posts, setPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [selectedGameId, setSelectedGameId] = useState("");
+  const [postGameId, setPostGameId] = useState(GAMES[0]?.id || "");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [commentDrafts, setCommentDrafts] = useState({});
+
+  const gameLabelMap = useMemo(
+    () => new Map(GAMES.map((game) => [game.id, game.title])),
+    [],
+  );
+
+  const loadPosts = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const query = new URLSearchParams();
+      if (selectedGameId) query.set("gameId", selectedGameId);
+      const response = await fetch(`/api/v1/community/posts?${query.toString()}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || "Unable to load community posts.");
+      }
+
+      setPosts(Array.isArray(payload.posts) ? payload.posts : []);
+    } catch (fetchError) {
+      setPosts([]);
+      setError(fetchError?.message || "Unable to load community posts.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedGameId, posts.length]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  const requireAuth = () => {
+    if (user) return true;
+    openAuthModal("login");
+    return false;
+  };
+
+  const submitPost = async () => {
+    if (!requireAuth() || isSubmitting) return;
+    if (title.trim().length < 3 || content.trim().length < 3 || !postGameId) return;
+
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/v1/community/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: postGameId, title, content }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || "Unable to create post.");
+      }
+
+      setTitle("");
+      setContent("");
+      await loadPosts();
+    } catch (submitError) {
+      setError(submitError?.message || "Unable to create post.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitReaction = async (postId, value) => {
+    if (!requireAuth()) return;
+
+    const response = await fetch(`/api/v1/community/posts/${postId}/reactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || payload?.success === false) {
+      setError(payload?.error || "Unable to update reaction.");
+      return;
+    }
+
+    setPosts((current) => current.map((post) => {
+      if (post.id !== postId) return post;
+      return {
+        ...post,
+        likesCount: payload.likesCount,
+        dislikesCount: payload.dislikesCount,
+      };
+    }));
+  };
+
+  const submitComment = async (postId) => {
+    if (!requireAuth()) return;
+
+    const draft = String(commentDrafts[postId] || "").trim();
+    if (!draft) return;
+
+    const response = await fetch(`/api/v1/community/posts/${postId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: draft }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success === false) {
+      setError(payload?.error || "Unable to add comment.");
+      return;
+    }
+
+    setCommentDrafts((current) => ({ ...current, [postId]: "" }));
+    setPosts((current) => current.map((post) => {
+      if (post.id !== postId) return post;
+      return {
+        ...post,
+        commentsCount: Number(post.commentsCount || 0) + 1,
+        comments: [...(Array.isArray(post.comments) ? post.comments : []), payload.comment],
+      };
+    }));
+  };
+
+  return (
+    <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[34%_66%]">
+      <div className="arcade-border flex min-h-0 flex-col gap-2 bg-(--cabinet-tan)/35 p-3 text-[10px] md:text-xs">
+        <h3 className="saloon-title text-lg text-(--title-red)">FORUM DISCUSSIONS</h3>
+
+        <label className="arcade-border flex items-center gap-2 bg-background px-2 py-1">
+          <span>FILTER:</span>
+          <select className="w-full bg-transparent" value={selectedGameId} onChange={(event) => setSelectedGameId(event.target.value)}>
+            <option value="">ALL GAMES</option>
+            {GAMES.map((game) => (
+              <option key={game.id} value={game.id}>{game.title.toUpperCase()}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="arcade-border flex flex-col gap-2 bg-(--screen-bg)/55 p-2">
+          <p className="text-[9px] md:text-[10px]">NEW POST</p>
+          <select className="arcade-border bg-background px-2 py-1" value={postGameId} onChange={(event) => setPostGameId(event.target.value)}>
+            {GAMES.map((game) => (
+              <option key={game.id} value={game.id}>{game.title.toUpperCase()}</option>
+            ))}
+          </select>
+          <input
+            className="arcade-border bg-background px-2 py-1"
+            maxLength={140}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Post title"
+            value={title}
+          />
+          <textarea
+            className="arcade-border min-h-24 resize-none bg-background px-2 py-1"
+            maxLength={4000}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Write your post"
+            value={content}
+          />
+          <button className="pixel-button px-3 py-2" disabled={isSubmitting} onClick={submitPost} type="button">
+            {isSubmitting ? "POSTING..." : "CREATE POST"}
+          </button>
+        </div>
+
+        {error ? <p className="text-(--title-red)">{error}</p> : null}
+        {!user ? <p className="text-[9px] md:text-[10px]">LOG IN TO POST, COMMENT, AND REACT.</p> : null}
+      </div>
+
+      <div className="arcade-border min-h-0 overflow-y-auto bg-(--cabinet-tan)/30 p-3 text-[10px] md:text-xs">
+        {isLoading ? <p className="loading-blink">LOADING DISCUSSIONS...</p> : null}
+        {!isLoading && posts.length === 0 ? <p>NO POSTS YET. START THE DISCUSSION.</p> : null}
+
+        <div className="space-y-3">
+          {posts.map((post) => (
+            <article key={post.id} className="arcade-border bg-(--screen-bg)/65 p-2">
+              <p className="text-[9px] text-(--accent-gold)">{(gameLabelMap.get(post.gameId) || post.gameId || "UNKNOWN").toUpperCase()}</p>
+              <h4 className="mt-1 text-xs md:text-sm">{String(post.title || "").toUpperCase()}</h4>
+              <p className="mt-1 whitespace-pre-wrap">{post.content}</p>
+              <p className="mt-2 text-[9px]">BY {(post.author?.name || "UNKNOWN").toUpperCase()}</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button className="arcade-border bg-background px-2 py-1" onClick={() => submitReaction(post.id, "like")} type="button">
+                  👍 {Number(post.likesCount || 0)}
+                </button>
+                <button className="arcade-border bg-background px-2 py-1" onClick={() => submitReaction(post.id, "dislike")} type="button">
+                  👎 {Number(post.dislikesCount || 0)}
+                </button>
+                <span className="arcade-border bg-background px-2 py-1">COMMENTS {Number(post.commentsCount || 0)}</span>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {(Array.isArray(post.comments) ? post.comments : []).map((comment) => (
+                  <div key={comment.id} className="arcade-border bg-background/70 px-2 py-1">
+                    <p className="text-[9px]">{(comment.author?.name || "UNKNOWN").toUpperCase()}</p>
+                    <p>{comment.content}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="arcade-border w-full bg-background px-2 py-1"
+                  maxLength={1200}
+                  onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))}
+                  placeholder="Add a comment"
+                  value={commentDrafts[post.id] || ""}
+                />
+                <button className="pixel-button px-3 py-1" onClick={() => submitComment(post.id)} type="button">
+                  COMMENT
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\views\LeaderboardsView.jsx
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+
+import { useLeaderboard } from "@/hooks/useLeaderboard";
+import { getLocalHighScore } from "@/lib/persistence";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { GAMES } from "@/utils/constants";
+
+const REGION_OPTIONS = [
+  { value: "", label: "WORLD" },
+  { value: "NORTH_AMERICA", label: "NORTH AMERICA" },
+  { value: "SOUTH_AMERICA", label: "SOUTH AMERICA" },
+  { value: "EUROPE", label: "EUROPE" },
+  { value: "AFRICA", label: "AFRICA" },
+  { value: "ASIA", label: "ASIA" },
+  { value: "MIDDLE_EAST", label: "MIDDLE EAST" },
+  { value: "OCEANIA", label: "OCEANIA" },
+];
+
+export default function LeaderboardsView({ user }) {
+  const selectedGameId = useArcadeStore((state) => state.selectedGameId);
+  const [region, setRegion] = useState("");
+  const [guestHighScore, setGuestHighScore] = useState(0);
+
+  const selectedGame = useMemo(
+    () => GAMES.find((game) => game.id === selectedGameId) ?? GAMES[0],
+    [selectedGameId],
+  );
+
+  const { rows, isLoading, error } = useLeaderboard(selectedGameId, { region, limit: 15 });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGuestHighScore() {
+      if (user) {
+        setGuestHighScore(0);
+        return;
+      }
+
+      const highScore = await getLocalHighScore(selectedGameId);
+      if (isMounted) setGuestHighScore(highScore);
+    }
+
+    loadGuestHighScore();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGameId, user]);
+
+  return (
+    <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[30%_70%]">
+      <div className="arcade-border bg-(--cabinet-tan)/40 p-3">
+        <div className="relative mx-auto aspect-square w-full max-w-[320px]">
+          <Image
+            alt={selectedGame.title}
+            className="rounded-md border-2 border-(--border-brown)/50 object-cover"
+            fill
+            src={selectedGame.src}
+          />
+        </div>
+      </div>
+
+      <div className="arcade-border flex min-h-0 flex-col bg-(--cabinet-tan)/30 p-3">
+        <h2 className="saloon-title mb-3 text-xl text-(--title-red) md:text-3xl">
+          GLOBAL LEADERBOARDS - {selectedGame.title.toUpperCase()}
+        </h2>
+        <div className="mb-3 flex gap-2 text-[9px] md:text-[10px]">
+          <label className="arcade-border flex items-center gap-2 bg-background px-2 py-1">
+            <span>REGION:</span>
+            <select className="bg-transparent" onChange={(event) => setRegion(event.target.value)} value={region}>
+              {REGION_OPTIONS.map((option) => (
+                <option key={option.value || "WORLD"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 border-b-2 border-foreground pb-2 text-[9px] md:text-[10px]">
+          <span>RANK</span><span>PLAYER</span><span>SCORE</span><span>DATE</span><span>COUNTRY</span>
+        </div>
+
+        <div className="mt-2 space-y-1 overflow-y-auto overflow-x-hidden pr-1 text-[9px] md:text-[10px]">
+          {isLoading ? <p className="loading-blink px-1 py-1">LOADING...</p> : null}
+          {error ? <p className="px-1 py-1 text-(--title-red)">{error}</p> : null}
+          {rows.map((row) => {
+            const isCurrentUserRow = Boolean(user?.id) && row.userId === user.id;
+            const dateLabel = row.achievedAt ? new Date(row.achievedAt).toISOString().slice(0, 10) : "-";
+
+            return (
+              <div
+                key={`${row.userId}-${row.rank}`}
+                className={[
+                  "grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 rounded px-1 py-1",
+                  isCurrentUserRow ? "bg-(--accent-gold)/25 outline-2 outline-(--accent-gold)" : "",
+                ].join(" ")}
+              >
+                <span>{row.rank}</span>
+                <span>{(row.playerName || "UNKNOWN").toUpperCase()}</span>
+                <span>{row.value}</span>
+                <span>{dateLabel}</span>
+                <span>{row.countryCode || "XX"}</span>
+              </div>
+            );
+          })}
+          {!user && guestHighScore > 0 ? (
+            <div className="grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 rounded bg-(--accent-gold)/20 px-1 py-1 outline-2 outline-(--accent-gold)">
+              <span>-</span>
+              <span>GUEST</span>
+              <span>{guestHighScore}</span>
+              <span>LOCAL</span>
+              <span>--</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\views\ProfileView.jsx
+"use client";
+
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+import { getLocalStats } from "@/lib/persistence";
+import { AVATARS } from "@/utils/constants";
+
+export default function ProfileView({ user, userStat }) {
+  const router = useRouter();
+  const [avatarError, setAvatarError] = useState("");
+  const [isAvatarSaving, setIsAvatarSaving] = useState(false);
+  const guestStats = useMemo(() => (user ? null : getLocalStats()), [user]);
+
+  const guestTimePlayedLabel = useMemo(() => {
+    if (!guestStats) return "0H (LOCAL)";
+    const hours = (guestStats.totalTimePlayed / 3600).toFixed(1);
+    return `${hours}H (LOCAL)`;
+  }, [guestStats]);
+
+  const guestMaxScoreLabel = useMemo(() => {
+    if (!guestStats) return "0 (LOCAL)";
+
+    return `${Number(guestStats.maxScore ?? 0).toLocaleString()} (LOCAL)`;
+  }, [guestStats]);
+
+  const guestRabbitsCollectedLabel = useMemo(() => {
+    if (!guestStats) return "0 (LOCAL)";
+    return `${guestStats.totalRabbitsCollected ?? 0} (LOCAL)`;
+  }, [guestStats]);
+
+  const guestCoinsCollectedLabel = useMemo(() => {
+    if (!guestStats) return "0 (LOCAL)";
+    return `${guestStats.totalCoinsCollected ?? 0} (LOCAL)`;
+  }, [guestStats]);
+
+  const lastPlayedLabel = useMemo(() => {
+    if (user) {
+      if (!userStat?.lastPlayedGame) return "N/A";
+      return userStat.lastPlayedGame.replaceAll("-", " ").toUpperCase();
+    }
+    if (!guestStats?.lastPlayedGame) return "N/A (LOCAL)";
+
+    return `${guestStats.lastPlayedGame.toUpperCase()} (LOCAL)`;
+  }, [guestStats, user, userStat]);
+
+  const serverMaxScoreLabel = useMemo(() => {
+    if (!user) return null;
+
+    return Number(userStat?.maxScore ?? 0).toLocaleString();
+  }, [user, userStat?.maxScore]);
+
+  const serverTimePlayedLabel = useMemo(() => {
+    if (!user) return null;
+    const totalSeconds = Number(userStat?.totalTimePlayed ?? 0);
+    if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0.0H";
+    return `${(totalSeconds / 3600).toFixed(1)}H`;
+  }, [user, userStat?.totalTimePlayed]);
+
+  const serverRabbitsCollectedLabel = useMemo(() => {
+    if (!user) return null;
+    return String(userStat?.totalRabbitsCollected ?? 0);
+  }, [user, userStat?.totalRabbitsCollected]);
+
+  const serverCoinsCollectedLabel = useMemo(() => {
+    if (!user) return null;
+    return String(userStat?.totalCoinsCollected ?? 0);
+  }, [user, userStat?.totalCoinsCollected]);
+
+  const handleAvatarChange = async (image) => {
+    if (!user || isAvatarSaving || user.image === image) return;
+
+    setAvatarError("");
+    setIsAvatarSaving(true);
+
+    const response = await fetch("/api/v1/users/avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image }),
+    });
+
+    setIsAvatarSaving(false);
+
+    if (!response.ok) {
+      setAvatarError("Unable to update avatar.");
+      return;
+    }
+
+    router.refresh();
+  };
+
+  return (
+    <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[35%_25%_40%]">
+      <div className="arcade-border flex flex-col gap-3 bg-(--cabinet-tan)/35 p-3 text-[10px] md:text-xs">
+        <div className="arcade-border relative h-24 w-24 overflow-hidden bg-(--screen-bg)/70">
+          <Image alt={user?.name ?? "Guest avatar"} className="object-cover" fill src={user?.image || AVATARS[0]} />
+        </div>
+        <div className="space-y-2 leading-5">
+          <p>USERNAME: {user?.name ?? "GUEST"}</p>
+          <p>MEMBER SINCE: {user ? "03/29/2011" : "N/A"}</p>
+          <p>REGION: {user ? "USA" : "LOCAL"}</p>
+        </div>
+        {user ? (
+          <div className="space-y-2">
+            <p className="text-[9px] md:text-[10px]">SELECT AVATAR</p>
+            <div className="relative">
+              <div className="grid grid-cols-5 gap-1">
+                {AVATARS.map((avatarSrc) => {
+                  const isSelected = avatarSrc === user.image;
+
+                  return (
+                    <button
+                      key={avatarSrc}
+                      className={[
+                        "arcade-border relative aspect-square overflow-hidden",
+                        isSelected ? "glow-gold" : "",
+                        isAvatarSaving ? "loading-blink" : "",
+                      ].join(" ")}
+                      disabled={isAvatarSaving}
+                      onClick={() => handleAvatarChange(avatarSrc)}
+                      type="button"
+                    >
+                      <Image alt="Avatar option" className="object-cover" fill src={avatarSrc} />
+                    </button>
+                  );
+                })}
+              </div>
+              {isAvatarSaving ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-(--screen-bg)/55">
+                  <div className="arcade-border loading-blink bg-(--cabinet-tan) px-2 py-1 text-[9px]">
+                    SAVING AVATAR...
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            {avatarError ? <p className="text-[9px] text-(--title-red)">{avatarError}</p> : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="arcade-border bg-(--cabinet-tan)/35 p-3 text-[10px] leading-5 md:text-xs">
+        <h3 className="mb-2">PLAYER STATS</h3>
+        <p>MAX SCORE</p>
+        <p className="mb-2">{user ? serverMaxScoreLabel : guestMaxScoreLabel}</p>
+        <p>HOURS PLAYED</p>
+        <p className="mb-2">{user ? serverTimePlayedLabel : guestTimePlayedLabel}</p>
+        <p>RABBITS</p>
+        <p className="mb-2">{user ? serverRabbitsCollectedLabel : guestRabbitsCollectedLabel}</p>
+        <p>COINS</p>
+        <p className="mb-2">{user ? serverCoinsCollectedLabel : guestCoinsCollectedLabel}</p>
+        <p>MOST PLAYED GAME</p>
+        <p>{lastPlayedLabel}</p>
+      </div>
+
+      <div className="arcade-border bg-(--cabinet-tan)/35 p-3 text-[10px] md:text-xs">
+        <h3 className="mb-3">RECENT ACHIEVEMENTS</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {["PONG MASTER", "DUSTBOWL VETERAN", "FISTFIGHT CHAMPION", "10K SCORE CLUB"].map((label) => (
+            <div key={label} className="arcade-border flex min-h-20 items-end justify-center bg-(--screen-bg)/70 p-2 text-center text-[8px] md:text-[9px]">
+              {label}
+            </div>
+          ))}
+        </div>
+        {!user ? <p className="mt-3 text-[9px] text-(--title-red)">LOG IN TO SAVE YOUR PROGRESS</p> : null}
+      </div>
+    </section>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\components\ArcadeScreenClient.jsx
+"use client";
+
+import { useMemo } from "react";
+
+import "@/lib/persistence";
+import AuthModal from "@/components/auth/AuthModal";
+import AllGamesView from "@/components/views/AllGamesView";
+import CommunityView from "@/components/views/CommunityView";
+import LeaderboardsView from "@/components/views/LeaderboardsView";
+import ProfileView from "@/components/views/ProfileView";
+import { useArcadeStore } from "@/store/arcadeStore";
+import { TABS } from "@/utils/constants";
+
+const VIEW_MAP = {
+  [TABS.ALL_GAMES]: AllGamesView,
+  [TABS.LEADERBOARDS]: LeaderboardsView,
+  [TABS.COMMUNITY]: CommunityView,
+  [TABS.PROFILE]: ProfileView,
+};
+
+export default function ArcadeScreenClient({ user, userStat }) {
+  const activeTab = useArcadeStore((state) => state.activeTab);
+  const isSwitchingTab = useArcadeStore((state) => state.isSwitchingTab);
+
+  const ActiveView = useMemo(() => VIEW_MAP[activeTab] ?? AllGamesView, [activeTab]);
+
+  return (
+    <div className="relative h-full w-full">
+      <ActiveView user={user} userStat={userStat} />
+      {isSwitchingTab ? (
+        <div className="pointer-events-none absolute inset-0 z-20 bg-(--screen-bg)/45 loading-blink" />
+      ) : null}
+      <AuthModal />
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FILE: /src\app\globals.css
+@import "tailwindcss";
+
+:root {
+  --cabinet-tan: #e2ba8c;
+  --screen-bg: #f4dfb8;
+  --border-brown: #4a2e15;
+  --accent-gold: #f3a726;
+  --title-red: #c94a38;
+  --border-inner: #f9f0dc;
+}
+
+@theme inline {
+  --color-background: var(--screen-bg);
+  --color-foreground: var(--border-brown);
+  --font-sans: var(--font-pixel);
+}
+
+body {
+  background: var(--cabinet-tan);
+  color: var(--border-brown);
+  font-family: var(--font-pixel), sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+.arcade-border {
+  border: 3px solid var(--border-brown);
+  box-shadow: inset 0 0 0 2px var(--border-inner);
+  border-radius: 8px;
+}
+
+.cabinet-lines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(74, 46, 21, 0.12) 0px,
+    rgba(74, 46, 21, 0.12) 2px,
+    transparent 2px,
+    transparent 18px
+  );
+}
+
+.saloon-title {
+  font-family: var(--font-saloon), serif;
+}
+
+.glow-gold {
+  box-shadow: 0 0 12px 4px var(--accent-gold);
+}
+
+.pixel-button {
+  border: 3px solid var(--border-brown);
+  border-radius: 10px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  background: linear-gradient(180deg, #f9c146 0%, var(--accent-gold) 100%);
+}
+
+@keyframes tumble-roll {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0.3;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(130px) rotate(360deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes dust-drift {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.45;
+  }
+  80% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(-12px) translateX(6px);
+    opacity: 0;
+  }
+}
+
+@keyframes blink-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.tumbleweed {
+  border: 2px dashed color-mix(in srgb, var(--border-brown) 65%, transparent);
+  border-radius: 9999px;
+  animation: tumble-roll 8s linear infinite;
+}
+
+.dust-mote {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--border-brown) 45%, transparent);
+  animation: dust-drift 2.3s ease-in-out infinite;
+}
+
+.loading-blink {
+  animation: blink-soft 1s ease-in-out infinite;
+}
+
+/* Custom scrollbar styling to match cabinet aesthetics */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-brown) var(--screen-bg);
+}
+
+/* Webkit-based browsers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--screen-bg) 85%, transparent);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--border-brown) 85%, #000 15%), var(--border-brown));
+  border-radius: 8px;
+  border: 2px solid var(--border-inner);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  filter: brightness(0.9);
+}
+
+/* Narrow scrollable lists inside arcade panels */
+.arcade-border ::-webkit-scrollbar {
+  width: 8px;
+}
+
+

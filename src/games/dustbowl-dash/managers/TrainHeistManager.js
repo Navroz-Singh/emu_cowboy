@@ -159,6 +159,7 @@ export class TrainHeistManager {
     this.clearHeistCoins();
 
     this.scene.obstacleManager?.clearForHeistTransition?.();
+    this.scene.laneCoinManager?.clearAllCoins?.();
 
     const lane0 = this.scene.lanes[0];
     const laneWidth = 148;
@@ -466,6 +467,7 @@ export class TrainHeistManager {
     if (!source) return;
 
     this.nextCoinTossAt = this.scene.time.now + 1000;
+    this.scene.coinsCollected = Number(this.scene.coinsCollected || 0) + 100;
     const burstCount = 2;
 
     for (let index = 0; index < burstCount; index += 1) {
@@ -497,7 +499,6 @@ export class TrainHeistManager {
   spawnHeistCoinToss(source) {
     const coin = this.scene.add.sprite(source.sourceX, source.sourceY, "coin").setDepth(14).setScale(1.45);
     this.heistCoins.push(coin);
-    this.scene.coinsCollected = Number(this.scene.coinsCollected || 0) + 1;
 
     const targetX = source.sourceX + Phaser.Math.Between(-20, 20);
     const targetY = coin.y - Phaser.Math.Between(120, 190);

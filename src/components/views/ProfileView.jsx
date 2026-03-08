@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -11,16 +11,7 @@ export default function ProfileView({ user, userStat }) {
   const router = useRouter();
   const [avatarError, setAvatarError] = useState("");
   const [isAvatarSaving, setIsAvatarSaving] = useState(false);
-  const [guestStats, setGuestStats] = useState(null);
-
-  useEffect(() => {
-    if (user) {
-      setGuestStats(null);
-      return;
-    }
-
-    setGuestStats(getLocalStats());
-  }, [user]);
+  const guestStats = useMemo(() => (user ? null : getLocalStats()), [user]);
 
   const guestTimePlayedLabel = useMemo(() => {
     if (!guestStats) return "0H (LOCAL)";
@@ -28,19 +19,10 @@ export default function ProfileView({ user, userStat }) {
     return `${hours}H (LOCAL)`;
   }, [guestStats]);
 
-  const guestTotalScoreLabel = useMemo(() => {
+  const guestMaxScoreLabel = useMemo(() => {
     if (!guestStats) return "0 (LOCAL)";
 
-    try {
-      return `${BigInt(guestStats.totalScore).toLocaleString()} (LOCAL)`;
-    } catch {
-      return "0 (LOCAL)";
-    }
-  }, [guestStats]);
-
-  const guestGamesPlayedLabel = useMemo(() => {
-    if (!guestStats) return "0 (LOCAL)";
-    return `${guestStats.gamesPlayed} (LOCAL)`;
+    return `${Number(guestStats.maxScore ?? 0).toLocaleString()} (LOCAL)`;
   }, [guestStats]);
 
   const guestRabbitsCollectedLabel = useMemo(() => {
@@ -61,22 +43,13 @@ export default function ProfileView({ user, userStat }) {
     if (!guestStats?.lastPlayedGame) return "N/A (LOCAL)";
 
     return `${guestStats.lastPlayedGame.toUpperCase()} (LOCAL)`;
-  }, [guestStats, user, userStat?.lastPlayedGame]);
+  }, [guestStats, user, userStat]);
 
-  const serverTotalScoreLabel = useMemo(() => {
+  const serverMaxScoreLabel = useMemo(() => {
     if (!user) return null;
 
-    try {
-      return BigInt(userStat?.totalScore || 0).toLocaleString();
-    } catch {
-      return "0";
-    }
-  }, [user, userStat?.totalScore]);
-
-  const serverGamesPlayedLabel = useMemo(() => {
-    if (!user) return null;
-    return String(userStat?.gamesPlayed ?? 0);
-  }, [user, userStat?.gamesPlayed]);
+    return Number(userStat?.maxScore ?? 0).toLocaleString();
+  }, [user, userStat?.maxScore]);
 
   const serverTimePlayedLabel = useMemo(() => {
     if (!user) return null;
@@ -168,15 +141,13 @@ export default function ProfileView({ user, userStat }) {
 
       <div className="arcade-border bg-(--cabinet-tan)/35 p-3 text-[10px] leading-5 md:text-xs">
         <h3 className="mb-2">PLAYER STATS</h3>
-        <p>TOTAL SCORE</p>
-        <p className="mb-2">{user ? serverTotalScoreLabel : guestTotalScoreLabel}</p>
-        <p>GAMES PLAYED</p>
-        <p className="mb-2">{user ? serverGamesPlayedLabel : guestGamesPlayedLabel}</p>
-        <p>TOTAL TIME PLAYED</p>
+        <p>MAX SCORE</p>
+        <p className="mb-2">{user ? serverMaxScoreLabel : guestMaxScoreLabel}</p>
+        <p>HOURS PLAYED</p>
         <p className="mb-2">{user ? serverTimePlayedLabel : guestTimePlayedLabel}</p>
-        <p>RABBITS COLLECTED</p>
+        <p>RABBITS</p>
         <p className="mb-2">{user ? serverRabbitsCollectedLabel : guestRabbitsCollectedLabel}</p>
-        <p>COINS COLLECTED</p>
+        <p>COINS</p>
         <p className="mb-2">{user ? serverCoinsCollectedLabel : guestCoinsCollectedLabel}</p>
         <p>MOST PLAYED GAME</p>
         <p>{lastPlayedLabel}</p>

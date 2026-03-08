@@ -8,12 +8,20 @@ import { getLocalHighScore } from "@/lib/persistence";
 import { useArcadeStore } from "@/store/arcadeStore";
 import { GAMES } from "@/utils/constants";
 
-const COUNTRY_OPTIONS = ["", "US", "CA", "MX", "BR", "JP", "GB"];
+const REGION_OPTIONS = [
+  { value: "", label: "WORLD" },
+  { value: "NORTH_AMERICA", label: "NORTH AMERICA" },
+  { value: "SOUTH_AMERICA", label: "SOUTH AMERICA" },
+  { value: "EUROPE", label: "EUROPE" },
+  { value: "AFRICA", label: "AFRICA" },
+  { value: "ASIA", label: "ASIA" },
+  { value: "MIDDLE_EAST", label: "MIDDLE EAST" },
+  { value: "OCEANIA", label: "OCEANIA" },
+];
 
 export default function LeaderboardsView({ user }) {
   const selectedGameId = useArcadeStore((state) => state.selectedGameId);
-  const [country, setCountry] = useState("");
-  const [sort, setSort] = useState("score");
+  const [region, setRegion] = useState("");
   const [guestHighScore, setGuestHighScore] = useState(0);
 
   const selectedGame = useMemo(
@@ -21,7 +29,7 @@ export default function LeaderboardsView({ user }) {
     [selectedGameId],
   );
 
-  const { rows, isLoading, error } = useLeaderboard(selectedGameId, { country, sort });
+  const { rows, isLoading, error } = useLeaderboard(selectedGameId, { region, limit: 15 });
 
   useEffect(() => {
     let isMounted = true;
@@ -62,21 +70,13 @@ export default function LeaderboardsView({ user }) {
         </h2>
         <div className="mb-3 flex gap-2 text-[9px] md:text-[10px]">
           <label className="arcade-border flex items-center gap-2 bg-background px-2 py-1">
-            <span>FILTER:</span>
-            <select className="bg-transparent" onChange={(event) => setCountry(event.target.value)} value={country}>
-              <option value="">WORLD</option>
-              {COUNTRY_OPTIONS.filter(Boolean).map((value) => (
-                <option key={value} value={value}>
-                  {value}
+            <span>REGION:</span>
+            <select className="bg-transparent" onChange={(event) => setRegion(event.target.value)} value={region}>
+              {REGION_OPTIONS.map((option) => (
+                <option key={option.value || "WORLD"} value={option.value}>
+                  {option.label}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="arcade-border flex items-center gap-2 bg-background px-2 py-1">
-            <span>SORT:</span>
-            <select className="bg-transparent" onChange={(event) => setSort(event.target.value)} value={sort}>
-              <option value="score">TOP SCORE</option>
-              <option value="recent">MOST RECENT</option>
             </select>
           </label>
         </div>

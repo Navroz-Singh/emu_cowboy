@@ -1,1 +1,0 @@
-re initialize obstacle patterns with new obstacle sprites

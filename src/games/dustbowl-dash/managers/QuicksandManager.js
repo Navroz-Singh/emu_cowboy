@@ -1,5 +1,3 @@
-import * as Phaser from "phaser";
-
 export class QuicksandManager {
   constructor(scene) {
     this.scene = scene;
@@ -7,11 +5,10 @@ export class QuicksandManager {
     this.quicksandPool = null;
     this.cowboyQuicksandOverlap = null;
 
-    this.nextQuicksandSpawnScore = Number(this.scene?.constants?.QUICKSAND_SCORE_INTERVAL || 2200);
     this.debuffActive = false;
     this.debuffEndsAt = 0;
-    this.speedBeforeDebuff = 0;
-    this.recoveryTween = null;
+    this.restoreSpeed = 0;
+    this.debuffSpeed = 0;
   }
 
   initObjectPools() {
@@ -51,11 +48,6 @@ export class QuicksandManager {
     }
     this.cowboyQuicksandOverlap = null;
 
-    if (this.recoveryTween) {
-      this.recoveryTween.stop();
-      this.recoveryTween = null;
-    }
-
     const traps = this.getQuicksandTraps();
     for (let index = 0; index < traps.length; index += 1) {
       const trap = traps[index];
@@ -65,16 +57,17 @@ export class QuicksandManager {
 
     this.debuffActive = false;
     this.debuffEndsAt = 0;
-    this.speedBeforeDebuff = 0;
+    this.restoreSpeed = 0;
+    this.debuffSpeed = 0;
     this.quicksandPool = null;
-    this.nextQuicksandSpawnScore = Number(this.scene?.constants?.QUICKSAND_SCORE_INTERVAL || 2200);
   }
 
   update(_dt, moveAmount) {
-    this.updateTraps(moveAmount);
+    this.moveTraps(moveAmount);
+    this.updateDebuff();
   }
 
-  updateTraps(moveAmount) {
+  moveTraps(moveAmount) {
     const traps = this.getQuicksandTraps();
 
     for (let index = 0; index < traps.length; index += 1) {
@@ -83,7 +76,7 @@ export class QuicksandManager {
 
       trap.y += moveAmount;
 
-      if (trap.y > this.scene.constants.DESPAWN_Y + 90) {
+      if (trap.y > this.scene.constants.DESPAWN_Y + 40) {
         this.disableTrap(trap);
       }
     }
@@ -101,10 +94,10 @@ export class QuicksandManager {
     if (!Number.isInteger(laneIndex) || laneIndex < 0 || laneIndex > 2) return null;
     if (!this.quicksandPool?.children?.entries) return null;
 
-    const trap = this.quicksandPool?.getFirstDead?.(false);
+    const trap = this.quicksandPool.getFirstDead(false);
     if (!trap) return null;
 
-    trap.setPosition(this.scene.lanes[laneIndex], this.scene.constants.SPAWN_Y - 20 + Number(yOffset || 0));
+    trap.setPosition(this.scene.lanes[laneIndex], this.scene.constants.SPAWN_Y + Number(yOffset || 0));
     trap.setActive(true).setVisible(true);
     trap.setScale(this.scene.constants.BASE_SPRITE_SCALE);
 
@@ -125,47 +118,52 @@ export class QuicksandManager {
 
   handleQuicksandOverlap = (_cowboy, trap) => {
     if (!trap?.active || this.scene.hasDied || this.scene.isGameOver) return;
-
-    if (this.debuffActive && this.scene.time.now < this.debuffEndsAt) {
-      return;
-    }
+    if (this.scene.isJumpInProgress) return;
+    if (this.debuffActive) return;
 
     this.applyDebuff();
   };
 
   applyDebuff() {
-    this.debuffActive = true;
     const debuffMs = Number(this.scene.constants.QUICKSAND_DEBUFF_MS || 2500);
-    this.debuffEndsAt = this.scene.time.now + debuffMs;
-
     const slowFactor = Number(this.scene.constants.QUICKSAND_SLOW_FACTOR || 0.5);
-    this.speedBeforeDebuff = Math.max(this.scene.constants.INITIAL_SPEED, this.scene.gameSpeed);
-    this.scene.gameSpeed = Math.max(120, this.speedBeforeDebuff * slowFactor);
+    const baselineSpeed = this.resolveBaselineSpeed();
+
+    this.debuffActive = true;
+    this.debuffEndsAt = this.scene.time.now + debuffMs;
+    this.restoreSpeed = baselineSpeed;
+    this.debuffSpeed = Math.max(120, baselineSpeed * slowFactor);
+    this.scene.gameSpeed = this.debuffSpeed;
 
     this.showSinkingText();
+  }
 
-    this.scene.time.delayedCall(debuffMs, () => {
-      if (this.scene.hasDied || this.scene.isGameOver) return;
-      if (this.scene.time.now < this.debuffEndsAt) return;
+  updateDebuff() {
+    if (!this.debuffActive) return;
 
-      const recoveryMs = Number(this.scene.constants.QUICKSAND_RECOVERY_MS || 450);
-      const targetSpeed = Math.min(this.speedBeforeDebuff, this.scene.constants.MAX_SPEED);
+    if (this.scene.time.now <= this.debuffEndsAt) {
+      this.scene.gameSpeed = this.debuffSpeed;
+      return;
+    }
 
-      if (this.recoveryTween) {
-        this.recoveryTween.stop();
-      }
+    this.scene.gameSpeed = Math.max(this.scene.gameSpeed, this.restoreSpeed);
+    this.debuffActive = false;
+    this.debuffEndsAt = 0;
+    this.restoreSpeed = 0;
+    this.debuffSpeed = 0;
+  }
 
-      this.recoveryTween = this.scene.tweens.add({
-        targets: this.scene,
-        gameSpeed: targetSpeed,
-        duration: recoveryMs,
-        ease: "Quad.easeOut",
-        onComplete: () => {
-          this.recoveryTween = null;
-          this.debuffActive = false;
-        },
-      });
-    });
+  resolveBaselineSpeed() {
+    const transientActiveUntil = Number(this.scene.transientSpeedUntil || 0);
+    const transientRestoreSpeed = Number(this.scene.transientSpeedRestoreSpeed || 0);
+    const candidateSpeed = transientActiveUntil > this.scene.time.now
+      ? Math.max(this.scene.gameSpeed, transientRestoreSpeed)
+      : this.scene.gameSpeed;
+
+    return Math.min(
+      Math.max(candidateSpeed, this.scene.constants.INITIAL_SPEED),
+      this.scene.constants.MAX_SPEED,
+    );
   }
 
   showSinkingText() {

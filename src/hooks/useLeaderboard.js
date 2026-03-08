@@ -2,10 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-export function useLeaderboard(gameId, { country = "", sort = "score" } = {}) {
+import { useSessionStorage } from "@/hooks/useSessionStorage";
+
+const LEADERBOARD_CACHE_TTL_MS = 60 * 1000;
+
+export function useLeaderboard(gameId, { region = "", limit = 15 } = {}) {
   const [rows, setRows] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const cacheKey = useMemo(
+    () => (gameId ? `leaderboard:${gameId}:${region || "WORLD"}:${String(limit)}` : ""),
+    [region, gameId, limit],
+  );
+  const [cachedPayload, setCachedPayload] = useSessionStorage(cacheKey, null);
 
   useEffect(() => {
     let isMounted = true;
@@ -16,14 +25,27 @@ export function useLeaderboard(gameId, { country = "", sort = "score" } = {}) {
         return;
       }
 
+      const cachedRows = Array.isArray(cachedPayload?.rows) ? cachedPayload.rows : null;
+      const cachedFetchedAt = Number(cachedPayload?.fetchedAt || 0);
+      const isCacheFresh = cachedRows && cachedFetchedAt > 0 && (Date.now() - cachedFetchedAt) < LEADERBOARD_CACHE_TTL_MS;
+
+      if (isCacheFresh) {
+        setRows(cachedRows);
+        setError("");
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError("");
 
       try {
-        const searchParams = new URLSearchParams({ limit: "15" });
-        if (country) searchParams.set("country", country);
+        const searchParams = new URLSearchParams({ limit: String(limit) });
+        if (region) searchParams.set("region", region);
 
-        const response = await fetch(`/api/v1/scores/${gameId}?${searchParams.toString()}`);
+        const response = await fetch(`/api/v1/scores/${gameId}?${searchParams.toString()}`, {
+          cache: "no-store",
+        });
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok || payload?.success === false) {
@@ -31,7 +53,12 @@ export function useLeaderboard(gameId, { country = "", sort = "score" } = {}) {
         }
 
         if (!isMounted) return;
-        setRows(Array.isArray(payload.rows) ? payload.rows : []);
+        const nextRows = Array.isArray(payload.rows) ? payload.rows : [];
+        setRows(nextRows);
+        setCachedPayload({
+          rows: nextRows,
+          fetchedAt: Date.now(),
+        });
       } catch (fetchError) {
         if (!isMounted) return;
         setRows([]);
@@ -46,28 +73,11 @@ export function useLeaderboard(gameId, { country = "", sort = "score" } = {}) {
     return () => {
       isMounted = false;
     };
-  }, [country, gameId]);
-
-  const sortedRows = useMemo(() => {
-    if (sort === "recent") {
-      return [...rows].sort((left, right) => {
-        const leftDate = new Date(left.achievedAt || 0).getTime();
-        const rightDate = new Date(right.achievedAt || 0).getTime();
-        return rightDate - leftDate;
-      });
-    }
-
-    return [...rows].sort((left, right) => {
-      if (right.value !== left.value) return right.value - left.value;
-      const leftDate = new Date(left.achievedAt || 0).getTime();
-      const rightDate = new Date(right.achievedAt || 0).getTime();
-      return leftDate - rightDate;
-    });
-  }, [rows, sort]);
+  }, [cachedPayload, gameId, limit, region, setCachedPayload]);
 
   const rankedRows = useMemo(
-    () => sortedRows.map((row, index) => ({ ...row, rank: index + 1 })),
-    [sortedRows]
+    () => rows.map((row, index) => ({ ...row, rank: index + 1 })),
+    [rows]
   );
 
   return {

@@ -12,19 +12,25 @@ import { useEmulatorStore } from "@/store/emulatorStore";
 export default function SystemOverlay({ gameId, gameTitle, user }) {
   const router = useRouter();
   const saveStatusTimeoutRef = useRef(null);
+  const gameOverShownAtRef = useRef(0);
 
   const [saveStatus, setSaveStatus] = useState("");
   const [isGameOverVisible, setIsGameOverVisible] = useState(false);
   const [isLeavingHome, setIsLeavingHome] = useState(false);
+  const [finalRunStats, setFinalRunStats] = useState({ rabbitsCollected: 0, coinsCollected: 0 });
 
   const isPaused = useEmulatorStore((state) => state.isPaused);
   const score = useEmulatorStore((state) => state.score);
   const highScore = useEmulatorStore((state) => state.highScore);
   const ammoCount = useEmulatorStore((state) => state.ammoCount);
+  const rabbitsCollected = useEmulatorStore((state) => state.rabbitsCollected);
+  const coinsCollected = useEmulatorStore((state) => state.coinsCollected);
   const togglePause = useEmulatorStore((state) => state.togglePause);
   const setPaused = useEmulatorStore((state) => state.setPaused);
   const setScore = useEmulatorStore((state) => state.setScore);
   const setAmmo = useEmulatorStore((state) => state.setAmmo);
+  const setRabbitsCollected = useEmulatorStore((state) => state.setRabbitsCollected);
+  const setCoinsCollected = useEmulatorStore((state) => state.setCoinsCollected);
   const reset = useEmulatorStore((state) => state.reset);
 
   const openAuthModal = useArcadeStore((state) => state.openAuthModal);
@@ -33,13 +39,21 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
   const formattedHighScore = useMemo(() => highScore.toLocaleString(), [highScore]);
 
   useEffect(() => {
-    const onScoreUpdated = ({ score: nextScore, ammo }) => {
+    const onScoreUpdated = ({ score: nextScore, ammo, rabbitsCollected: nextRabbitsCollected, coinsCollected: nextCoinsCollected }) => {
       setScore(nextScore);
       if (ammo !== undefined) setAmmo(ammo);
+      if (nextRabbitsCollected !== undefined) setRabbitsCollected(nextRabbitsCollected);
+      if (nextCoinsCollected !== undefined) setCoinsCollected(nextCoinsCollected);
     };
 
     const onPlayerDied = async ({ score: finalScore, timePlayed, rabbitsCollected = 0, coinsCollected = 0 }) => {
       setScore(finalScore);
+      setRabbitsCollected(rabbitsCollected);
+      setCoinsCollected(coinsCollected);
+      setFinalRunStats({ rabbitsCollected, coinsCollected });
+      setPaused(true);
+      EventBus.emit(EVENTS.SYSTEM_PAUSE);
+      gameOverShownAtRef.current = Date.now();
       setIsGameOverVisible(true);
       await submitScore(gameId, finalScore, user, timePlayed, { rabbitsCollected, coinsCollected });
     };
@@ -78,7 +92,7 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
         saveStatusTimeoutRef.current = null;
       }
     };
-  }, [gameId, setAmmo, setScore, user]);
+  }, [gameId, setAmmo, setCoinsCollected, setPaused, setRabbitsCollected, setScore, user]);
 
   const handlePauseToggle = () => {
     const nextPaused = togglePause();
@@ -92,9 +106,15 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
   };
 
   const handlePlayAgain = () => {
+    const elapsedSinceGameOver = Date.now() - Number(gameOverShownAtRef.current || 0);
+    if (elapsedSinceGameOver < 300) return;
+
     setIsLeavingHome(false);
     reset();
+    setFinalRunStats({ rabbitsCollected: 0, coinsCollected: 0 });
     setIsGameOverVisible(false);
+    setPaused(false);
+    EventBus.emit(EVENTS.SYSTEM_RESUME);
     EventBus.emit(EVENTS.GAME_RESTART);
   };
 
@@ -112,6 +132,8 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
         <h3 className="saloon-title text-2xl text-(--title-red)">GAME OVER</h3>
         <p className="mt-3 text-[10px] md:text-xs">FINAL SCORE</p>
         <p className="mt-1 text-xl text-(--accent-gold)">{formattedScore}</p>
+        <p className="mt-2 text-[10px] md:text-xs">RABBITS: {Number(finalRunStats.rabbitsCollected || 0)}</p>
+        <p className="text-[10px] md:text-xs">COINS: {Number(finalRunStats.coinsCollected || 0)}</p>
 
         <div className="mt-4 space-y-2">
           <button className="pixel-button w-full px-3 py-2 text-[10px] md:text-xs" onClick={handlePlayAgain} type="button">
@@ -148,6 +170,8 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
             <p className="mt-1">SCORE: {formattedScore}</p>
             <p>HIGH: {formattedHighScore}</p>
             <p>AMMO: {ammoCount}</p>
+            <p>RABBITS: {rabbitsCollected}</p>
+            <p>COINS: {coinsCollected}</p>
           </div>
 
           <div className="pointer-events-auto flex items-center gap-2">

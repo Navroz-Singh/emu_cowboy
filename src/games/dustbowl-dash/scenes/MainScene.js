@@ -4,6 +4,7 @@ import { EVENTS, EventBus } from "@/lib/eventBus";
 import { ACTION_STATE, GAME_CONSTANTS } from "@/games/dustbowl-dash/constants/GameConstants";
 import { AmmoRefillManager } from "@/games/dustbowl-dash/managers/AmmoRefillManager";
 import { EnemyManager } from "@/games/dustbowl-dash/managers/EnemyManager";
+import { LaneCoinManager } from "@/games/dustbowl-dash/managers/LaneCoinManager";
 import { ObstacleManager } from "@/games/dustbowl-dash/managers/ObstacleManager";
 import { PlayerController } from "@/games/dustbowl-dash/managers/PlayerController";
 import { QuicksandManager } from "@/games/dustbowl-dash/managers/QuicksandManager";
@@ -53,10 +54,13 @@ export class MainScene extends Phaser.Scene {
     this.shadowBaseY = 530;
     this.cowboyOnTrain = false;
     this.postHeistObstacleCooldownUntil = 0;
+    this.transientSpeedRestoreSpeed = 0;
+    this.transientSpeedUntil = 0;
 
     this.vfxManager = null;
     this.enemyManager = null;
     this.ammoRefillManager = null;
+    this.laneCoinManager = null;
     this.obstacleManager = null;
     this.quicksandManager = null;
     this.playerController = null;
@@ -91,6 +95,8 @@ export class MainScene extends Phaser.Scene {
     this.surgeTimer = 0;
     this.surgePhase = "plateau";
     this.postHeistObstacleCooldownUntil = 0;
+    this.transientSpeedRestoreSpeed = 0;
+    this.transientSpeedUntil = 0;
 
     const hasDesertTexture = this.textures.exists("desert-bg");
     this.bg = hasDesertTexture
@@ -133,6 +139,7 @@ export class MainScene extends Phaser.Scene {
     this.obstacleManager = new ObstacleManager(this, this.vfxManager);
     this.enemyManager = new EnemyManager(this, this.obstacleManager, this.vfxManager);
     this.ammoRefillManager = new AmmoRefillManager(this, this.vfxManager);
+    this.laneCoinManager = new LaneCoinManager(this);
     this.quicksandManager = new QuicksandManager(this);
     this.spawnerSystem = new SpawnerSystem(this, this.obstacleManager);
     this.trainHeistManager = new TrainHeistManager(this);
@@ -141,10 +148,12 @@ export class MainScene extends Phaser.Scene {
     this.obstacleManager.initObjectPools();
     this.enemyManager.initObjectPools();
     this.ammoRefillManager.initObjectPools();
+    this.laneCoinManager.initObjectPools();
     this.quicksandManager.initObjectPools();
     this.obstacleManager.initCollisions();
     this.enemyManager.initCollisions();
     this.ammoRefillManager.initCollisions();
+    this.laneCoinManager.initCollisions();
     this.quicksandManager.initCollisions();
     this.playerController.initKeyboard();
     this.initBridgeListeners();
@@ -174,6 +183,7 @@ export class MainScene extends Phaser.Scene {
     this.obstacleManager?.update(dt, moveAmount);
     this.enemyManager?.update(dt, moveAmount);
     this.ammoRefillManager?.update(dt, moveAmount);
+    this.laneCoinManager?.update(dt, moveAmount);
     this.quicksandManager?.update(dt, moveAmount);
     this.spawnerSystem?.update(dt, moveAmount);
     this.trainHeistManager?.update(dt, moveAmount);
@@ -275,6 +285,7 @@ export class MainScene extends Phaser.Scene {
     this.obstacleManager?.cleanup();
     this.enemyManager?.cleanup?.();
     this.ammoRefillManager?.cleanup?.();
+    this.laneCoinManager?.cleanup?.();
     this.quicksandManager?.cleanup?.();
     this.spawnerSystem?.cleanup?.();
     this.trainHeistManager?.cleanup?.();
@@ -287,6 +298,8 @@ export class MainScene extends Phaser.Scene {
     this.cursors = null;
     this.keys = null;
     this.surgeTweenActive = false;
+    this.transientSpeedRestoreSpeed = 0;
+    this.transientSpeedUntil = 0;
   }
 
   shutdown() {

@@ -13,6 +13,12 @@ export default async function Home() {
         where: { userId: user.id },
       })
     : null;
+  const rawUserMaxScore = user
+    ? await prisma.leaderboardEntry.aggregate({
+        where: { userId: user.id },
+        _max: { value: true },
+      })
+    : null;
 
   const userStat = rawUserStat
     ? {
@@ -22,6 +28,7 @@ export default async function Home() {
         totalRabbitsCollected: rawUserStat.totalRabbitsCollected,
         totalCoinsCollected: rawUserStat.totalCoinsCollected,
         lastPlayedGame: rawUserStat.lastPlayedGame,
+        maxScore: rawUserMaxScore?._max?.value ?? 0,
       }
     : null;
 

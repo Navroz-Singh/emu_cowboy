@@ -133,7 +133,7 @@ function testModularManagerContracts() {
   assert(has(constantsSource, /SURGE_CYCLE:\s*30000/), "SURGE_CYCLE constant should be 30000ms");
   assert(has(constantsSource, /SURGE_INCREMENT:\s*75/), "SURGE_INCREMENT constant should be 75");
   assert(has(constantsSource, /LASSO_DURATION:\s*300/), "Lasso duration should be 300ms");
-  assert(has(constantsSource, /WAGON_SCALE:\s*1\.5/), "Wagon scale should be 1.5");
+  assert(has(constantsSource, /WAGON_SCALE:\s*1\.8/), "Wagon scale should be 1.8");
   assert(has(constantsSource, /SIGN_SCALE:\s*1\.8/), "Wanted sign scale should be 1.8");
   assert(has(constantsSource, /TOTEM_SCALE:\s*1\.8/), "Totem scale should be 1.8");
   assert(has(constantsSource, /BASE_SPRITE_SCALE:\s*1\.2/), "Base sprite scale should be 1.2");

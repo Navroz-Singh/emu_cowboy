@@ -46,6 +46,23 @@ function writeSaves(storage, saves) {
   storage.setItem(LOCAL_SAVES_KEY, JSON.stringify(saves));
 }
 
+function clearLeaderboardCacheForGame(gameId) {
+  if (typeof window === "undefined" || !window.sessionStorage || !gameId) return;
+
+  const prefix = `leaderboard:${gameId}:`;
+  const keysToRemove = [];
+
+  for (let index = 0; index < window.sessionStorage.length; index += 1) {
+    const key = window.sessionStorage.key(index);
+    if (!key || !key.startsWith(prefix)) continue;
+    keysToRemove.push(key);
+  }
+
+  for (let index = 0; index < keysToRemove.length; index += 1) {
+    window.sessionStorage.removeItem(keysToRemove[index]);
+  }
+}
+
 export async function submitScore(gameId, value, user, timePlayed = 0, meta = {}) {
   const normalizedValue = normalizeInt(value);
   const normalizedTimePlayed = normalizeInt(timePlayed);
@@ -62,6 +79,8 @@ export async function submitScore(gameId, value, user, timePlayed = 0, meta = {}
     if (!response.ok || payload?.success === false) {
       throw new Error(payload?.error || `Failed to submit score (${response.status})`);
     }
+
+    clearLeaderboardCacheForGame(gameId);
 
     return payload;
   }
@@ -104,6 +123,7 @@ export function getLocalStats() {
     return {
       totalScore: "0",
       gamesPlayed: 0,
+      maxScore: 0,
       totalTimePlayed: 0,
       lastPlayedGame: null,
       totalRabbitsCollected: 0,
@@ -114,6 +134,7 @@ export function getLocalStats() {
   const scores = readScores(storage);
   let totalScore = 0n;
   let gamesPlayed = 0;
+  let maxScore = 0;
   let totalTimePlayed = 0;
   let totalRabbitsCollected = 0;
   let totalCoinsCollected = 0;
@@ -125,6 +146,7 @@ export function getLocalStats() {
 
     for (const entry of entries) {
       totalScore += BigInt(normalizeInt(entry?.value));
+      maxScore = Math.max(maxScore, normalizeInt(entry?.value));
       gamesPlayed += 1;
       totalTimePlayed += normalizeInt(entry?.timePlayed);
       totalRabbitsCollected += normalizeInt(entry?.rabbitsCollected);
@@ -141,6 +163,7 @@ export function getLocalStats() {
   return {
     totalScore: totalScore.toString(),
     gamesPlayed,
+    maxScore,
     totalTimePlayed,
     lastPlayedGame,
     totalRabbitsCollected,

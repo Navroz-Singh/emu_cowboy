@@ -33,7 +33,9 @@ export class SpawnerSystem {
     this.tumbleweedPatternLockUntil = 0;
     this.pendingRabbitSpawnScore = null;
     this.nextTumbleweedSpawnScore = Number(this.scene?.constants?.TUMBLEWEED_SCORE_INTERVAL || 800);
+    this.nextQuicksandSpawnScore = Number(this.scene?.constants?.QUICKSAND_SCORE_INTERVAL || 2200);
     this.nextAmmoRefillSpawnScore = Number(this.scene?.constants?.AMMO_REFILL_SCORE_INTERVAL || 1000);
+    this.nextLaneCoinSpawnScore = Number(this.scene?.constants?.COIN_LANE_SCORE_INTERVAL || 450);
   }
 
   cleanup() {
@@ -43,7 +45,9 @@ export class SpawnerSystem {
     this.activeRabbits.clear();
     this.pendingRabbitSpawnScore = null;
     this.nextTumbleweedSpawnScore = Number(this.scene?.constants?.TUMBLEWEED_SCORE_INTERVAL || 800);
+    this.nextQuicksandSpawnScore = Number(this.scene?.constants?.QUICKSAND_SCORE_INTERVAL || 2200);
     this.nextAmmoRefillSpawnScore = Number(this.scene?.constants?.AMMO_REFILL_SCORE_INTERVAL || 1000);
+    this.nextLaneCoinSpawnScore = Number(this.scene?.constants?.COIN_LANE_SCORE_INTERVAL || 450);
   }
 
   update(dt, moveAmount) {
@@ -254,7 +258,307 @@ export class SpawnerSystem {
       }
     }
 
+    if (didSpawn) {
+      this.trySpawnLaneCoins();
+    }
+
     return didSpawn;
+  }
+
+  trySpawnLaneCoins(options = {}) {
+    const force = Boolean(options.force);
+    const relaxed = Boolean(options.relaxed);
+
+    if (this.scene.trainHeistManager?.isHeistActive) return false;
+
+    const laneCoinManager = this.scene.laneCoinManager;
+    if (!laneCoinManager?.spawnInLane) return false;
+    if (this.scene.score < this.nextLaneCoinSpawnScore && !force) return false;
+
+    const maxActive = Number(this.scene.constants.COIN_LANE_MAX_ACTIVE || 16);
+    const activeCoins = Number(laneCoinManager.getActiveCoinCount?.() || 0);
+    if (activeCoins >= maxActive) return false;
+
+    const configuredSpawnChance = Number(this.scene.constants.COIN_LANE_SPAWN_CHANCE || 92);
+    const spawnChance = force ? 100 : (relaxed ? Math.max(configuredSpawnChance, 92) : configuredSpawnChance);
+    if (Phaser.Math.Between(1, 100) > spawnChance) return false;
+
+    const baseMinFreeLength = Number(this.scene.constants.COIN_LANE_MIN_FREE_LENGTH || 40);
+    const minFreeLength = relaxed ? Math.max(30, baseMinFreeLength - 10) : baseMinFreeLength;
+    const spacing = Number(this.scene.constants.COIN_LANE_SPACING || 44);
+    const maxConsecutive = Number(this.scene.constants.COIN_LANE_MAX_CONSECUTIVE || 8);
+    const startMargin = Number(this.scene.constants.COIN_LANE_START_MARGIN || 6);
+    const endMargin = Number(this.scene.constants.COIN_LANE_END_MARGIN || 6);
+    const remainingGlobalCapacity = Math.max(0, maxActive - activeCoins);
+    if (remainingGlobalCapacity <= 0) return false;
+
+    const laneCandidates = Phaser.Utils.Array.Shuffle([0, 1, 2]);
+    const maxSimultaneousLanes = Math.min(2, laneCandidates.length);
+    let lanesSpawned = 0;
+    let totalSpawned = 0;
+
+    for (let laneIdx = 0; laneIdx < laneCandidates.length; laneIdx += 1) {
+      if (lanesSpawned >= maxSimultaneousLanes) break;
+      if (totalSpawned >= remainingGlobalCapacity) break;
+
+      const laneIndex = laneCandidates[laneIdx];
+      const gapSegments = this.getCoinGapSegmentsInLane(laneIndex, 24);
+      if (gapSegments.length === 0) {
+        continue;
+      }
+
+      const eligibleGaps = gapSegments.filter((gap) => gap.length >= minFreeLength);
+      if (eligibleGaps.length === 0) continue;
+
+      const selectedGap = Phaser.Utils.Array.GetRandom(eligibleGaps);
+
+      const usableStartY = selectedGap.startY + startMargin;
+      const usableEndY = selectedGap.endY - endMargin;
+      const usableLength = usableEndY - usableStartY;
+
+      if (usableLength < spacing) {
+        continue;
+      }
+
+      const rawCount = Math.floor(usableLength / spacing) + 1;
+      const laneRemainingCapacity = Math.max(0, remainingGlobalCapacity - totalSpawned);
+      const maxCoinCount = Math.max(0, Math.min(rawCount, maxConsecutive, laneRemainingCapacity));
+      if (maxCoinCount <= 0) {
+        continue;
+      }
+
+      const minCoinCount = maxCoinCount >= 3 ? 3 : 1;
+      const coinCount = Phaser.Math.Between(minCoinCount, maxCoinCount);
+
+      const definitions = [];
+      for (let index = 0; index < coinCount; index += 1) {
+        const jitter = Phaser.Math.Between(-2, 2);
+        const coinY = Math.min(usableEndY, usableStartY + (index * spacing) + jitter);
+        const yOffset = coinY - this.scene.constants.SPAWN_Y;
+        definitions.push({ laneIndex, type: "laneCoin", yOffset });
+      }
+
+      if (this.hasActiveLaneCoinCrowding(definitions, 42)) {
+        continue;
+      }
+
+      if (!this.hasCoinBlockerClearance(definitions, 58)) {
+        continue;
+      }
+
+      let spawnedCount = 0;
+      for (let index = 0; index < definitions.length; index += 1) {
+        const entry = definitions[index];
+        const coin = laneCoinManager.spawnInLane(entry.laneIndex, entry.yOffset || 0);
+        if (!coin) break;
+        spawnedCount += 1;
+      }
+
+      if (spawnedCount > 0) {
+        lanesSpawned += 1;
+        totalSpawned += spawnedCount;
+      }
+    }
+
+    if (lanesSpawned > 0) {
+        const interval = Number(this.scene.constants.COIN_LANE_SCORE_INTERVAL || 80);
+      this.nextLaneCoinSpawnScore = this.scene.score + (force ? Math.max(50, Math.floor(interval / 2)) : interval);
+      return true;
+    }
+
+    return false;
+  }
+
+  hasActiveLaneCoinCrowding(definitions, minGap = 34) {
+    const laneCoins = this.scene.laneCoinManager?.coinPool?.getChildren?.() || [];
+
+    for (let index = 0; index < definitions.length; index += 1) {
+      const definition = definitions[index];
+      const spawnY = this.scene.constants.SPAWN_Y + Number(definition.yOffset || 0);
+      const laneX = this.scene.lanes[definition.laneIndex];
+
+      for (let coinIndex = 0; coinIndex < laneCoins.length; coinIndex += 1) {
+        const laneCoin = laneCoins[coinIndex];
+        if (!laneCoin?.active) continue;
+        if (Math.abs(laneCoin.x - laneX) > 90) continue;
+        if (Math.abs(laneCoin.y - spawnY) < minGap) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  hasCoinBlockerClearance(definitions, minGap = 58) {
+    const obstacles = this.obstacleManager?.obstaclePool?.getChildren?.() || [];
+    const traps = this.scene.quicksandManager?.quicksandPool?.getChildren?.() || [];
+    const refills = this.scene.ammoRefillManager?.refillPool?.getChildren?.() || [];
+    const wagons = this.obstacleManager?.wagonPool?.getChildren?.() || [];
+
+    const isSameLane = (x, laneIndex) => Math.abs((x ?? 0) - this.scene.lanes[laneIndex]) <= 90;
+
+    for (let index = 0; index < definitions.length; index += 1) {
+      const definition = definitions[index];
+      const spawnY = this.scene.constants.SPAWN_Y + Number(definition.yOffset || 0);
+
+      for (let obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex += 1) {
+        const obstacle = obstacles[obstacleIndex];
+        if (!obstacle?.active) continue;
+        if (!isSameLane(obstacle.x, definition.laneIndex)) continue;
+        if (Math.abs(obstacle.y - spawnY) < minGap) return false;
+      }
+
+      for (let trapIndex = 0; trapIndex < traps.length; trapIndex += 1) {
+        const trap = traps[trapIndex];
+        if (!trap?.active) continue;
+        if (!isSameLane(trap.x, definition.laneIndex)) continue;
+        if (Math.abs(trap.y - spawnY) < minGap) return false;
+      }
+
+      for (let refillIndex = 0; refillIndex < refills.length; refillIndex += 1) {
+        const refill = refills[refillIndex];
+        if (!refill?.active) continue;
+        if (!isSameLane(refill.x, definition.laneIndex)) continue;
+        if (Math.abs(refill.y - spawnY) < minGap) return false;
+      }
+
+      for (let wagonIndex = 0; wagonIndex < wagons.length; wagonIndex += 1) {
+        const wagon = wagons[wagonIndex];
+        if (!wagon?.active) continue;
+        const wagonLanes = this.getWagonBlockedLanes(wagon.x);
+        if (!wagonLanes.includes(definition.laneIndex)) continue;
+        if (Math.abs(wagon.y - spawnY) < minGap) return false;
+      }
+    }
+
+    return true;
+  }
+
+  getCoinGapSegmentsInLane(laneIndex, blockerPadding = 65) {
+    const laneX = this.scene.lanes[laneIndex];
+    const maxSpawnY = -18;
+    const extraOffscreenBand = 360;
+    const blockers = [];
+
+    const collectBlockerY = (y) => {
+      if (!Number.isFinite(y)) return;
+      if (y < this.scene.constants.SPAWN_Y - 40) return;
+      blockers.push(y);
+    };
+
+    const obstacles = this.obstacleManager?.obstaclePool?.getChildren?.() || [];
+    for (let index = 0; index < obstacles.length; index += 1) {
+      const obstacle = obstacles[index];
+      if (!obstacle?.active) continue;
+      if (Math.abs(obstacle.x - laneX) > 90) continue;
+      collectBlockerY(obstacle.y);
+    }
+
+    const traps = this.scene.quicksandManager?.quicksandPool?.getChildren?.() || [];
+    for (let index = 0; index < traps.length; index += 1) {
+      const trap = traps[index];
+      if (!trap?.active) continue;
+      if (Math.abs(trap.x - laneX) > 90) continue;
+      collectBlockerY(trap.y);
+    }
+
+    const refills = this.scene.ammoRefillManager?.refillPool?.getChildren?.() || [];
+    for (let index = 0; index < refills.length; index += 1) {
+      const refill = refills[index];
+      if (!refill?.active) continue;
+      if (Math.abs(refill.x - laneX) > 90) continue;
+      collectBlockerY(refill.y);
+    }
+
+    const wagons = this.obstacleManager?.wagonPool?.getChildren?.() || [];
+    for (let index = 0; index < wagons.length; index += 1) {
+      const wagon = wagons[index];
+      if (!wagon?.active) continue;
+      const blockedLanes = this.getWagonBlockedLanes(wagon.x);
+      if (!blockedLanes.includes(laneIndex)) continue;
+      collectBlockerY(wagon.y);
+    }
+
+    blockers.sort((a, b) => a - b);
+
+    const segments = [];
+    let segmentStart = this.scene.constants.SPAWN_Y - extraOffscreenBand;
+
+    for (let index = 0; index < blockers.length; index += 1) {
+      const blockerY = blockers[index];
+      const segmentEnd = Math.min(maxSpawnY, blockerY - blockerPadding);
+      if (segmentEnd > segmentStart) {
+        segments.push({
+          startY: segmentStart,
+          endY: segmentEnd,
+          length: segmentEnd - segmentStart,
+        });
+      }
+      segmentStart = Math.max(segmentStart, Math.min(maxSpawnY + 1, blockerY + blockerPadding));
+    }
+
+    const finalEnd = maxSpawnY;
+    if (finalEnd > segmentStart) {
+      segments.push({
+        startY: segmentStart,
+        endY: finalEnd,
+        length: finalEnd - segmentStart,
+      });
+    }
+
+    return segments;
+  }
+
+  getLaneFreeLengthFromSpawn(laneIndex) {
+    const nearestBlockerY = this.getNearestBlockingYInLane(laneIndex);
+    return Math.max(0, nearestBlockerY - this.scene.constants.SPAWN_Y);
+  }
+
+  getNearestBlockingYInLane(laneIndex) {
+    const laneX = this.scene.lanes[laneIndex];
+    let nearestY = this.scene.constants.CANVAS_HEIGHT + 340;
+
+    const considerY = (y) => {
+      if (!Number.isFinite(y)) return;
+      if (y < this.scene.constants.SPAWN_Y - 30) return;
+      if (y < nearestY) nearestY = y;
+    };
+
+    const obstacles = this.obstacleManager?.obstaclePool?.getChildren?.() || [];
+    for (let index = 0; index < obstacles.length; index += 1) {
+      const obstacle = obstacles[index];
+      if (!obstacle?.active) continue;
+      if (Math.abs(obstacle.x - laneX) > 90) continue;
+      considerY(obstacle.y);
+    }
+
+    const traps = this.scene.quicksandManager?.quicksandPool?.getChildren?.() || [];
+    for (let index = 0; index < traps.length; index += 1) {
+      const trap = traps[index];
+      if (!trap?.active) continue;
+      if (Math.abs(trap.x - laneX) > 90) continue;
+      considerY(trap.y);
+    }
+
+    const refills = this.scene.ammoRefillManager?.refillPool?.getChildren?.() || [];
+    for (let index = 0; index < refills.length; index += 1) {
+      const refill = refills[index];
+      if (!refill?.active) continue;
+      if (Math.abs(refill.x - laneX) > 90) continue;
+      considerY(refill.y);
+    }
+
+    const wagons = this.obstacleManager?.wagonPool?.getChildren?.() || [];
+    for (let index = 0; index < wagons.length; index += 1) {
+      const wagon = wagons[index];
+      if (!wagon?.active) continue;
+      const blockedLanes = this.getWagonBlockedLanes(wagon.x);
+      if (!blockedLanes.includes(laneIndex)) continue;
+      considerY(wagon.y);
+    }
+
+    return nearestY;
   }
 
   trySpawnAmmoRefill() {
@@ -725,7 +1029,8 @@ export class SpawnerSystem {
       .sort((a, b) => b.yOffset - a.yOffset);
 
     const rows = [];
-    const ROW_CLUSTER_DELTA = 45;
+    const ROW_CLUSTER_DELTA = 36;
+    const ACTIVE_BLOCK_TOLERANCE = 54;
     for (let index = 0; index < sorted.length; index += 1) {
       const item = sorted[index];
       const lastRow = rows[rows.length - 1];
@@ -755,7 +1060,7 @@ export class SpawnerSystem {
       const row = rows[index];
       const blocked = new Set(row.lanes);
       const absoluteRowY = this.scene.constants.SPAWN_Y + row.anchor;
-      const activeBlockedLanes = this.getBlockedLanesFromActiveObjects(absoluteRowY, ROW_CLUSTER_DELTA);
+      const activeBlockedLanes = this.getBlockedLanesFromActiveObjects(absoluteRowY, ACTIVE_BLOCK_TOLERANCE);
       activeBlockedLanes.forEach((lane) => blocked.add(lane));
       const open = fallbackSet.filter((lane) => !blocked.has(lane));
       if (open.length === 0) {

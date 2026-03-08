@@ -161,6 +161,8 @@ export class PlayerController {
       this.activeShadowJumpTween = null;
     }
 
+    this.resetJumpVisualState();
+
     this.scene.isJumpInProgress = true;
     this.scene.actionState = ACTION_STATE.JUMPING;
 
@@ -175,6 +177,7 @@ export class PlayerController {
         this.activeJumpTween = null;
         this.scene.isJumpInProgress = false;
         this.jumpChainCount = 0;
+        this.resetJumpVisualState();
         if (this.scene.actionState !== ACTION_STATE.SWITCHING) {
           this.scene.actionState = ACTION_STATE.IDLE;
         }
@@ -191,8 +194,20 @@ export class PlayerController {
         ease: "Quad.easeOut",
         onComplete: () => {
           this.activeShadowJumpTween = null;
+          this.resetJumpVisualState();
         },
       });
+    }
+  }
+
+  resetJumpVisualState() {
+    if (this.scene.cowboy) {
+      this.scene.cowboy.setScale(this.scene.constants.BASE_SPRITE_SCALE);
+    }
+
+    if (this.scene.shadow) {
+      this.scene.shadow.alpha = 0.5;
+      this.scene.shadow.y = this.scene.shadowBaseY;
     }
   }
 
@@ -342,10 +357,18 @@ export class PlayerController {
           });
 
           const savedSpeed = this.scene.gameSpeed;
+          const transientMs = 500;
+          this.scene.transientSpeedRestoreSpeed = Math.max(Number(this.scene.transientSpeedRestoreSpeed || 0), savedSpeed);
+          this.scene.transientSpeedUntil = this.scene.time.now + transientMs;
           this.scene.gameSpeed = Math.max(120, this.scene.gameSpeed * 0.3);
-          this.scene.time.delayedCall(500, () => {
+          this.scene.time.delayedCall(transientMs, () => {
             if (!this.scene.hasDied && !this.scene.isGameOver) {
               this.scene.gameSpeed = Math.max(savedSpeed, this.scene.gameSpeed);
+            }
+
+            if (this.scene.time.now >= Number(this.scene.transientSpeedUntil || 0)) {
+              this.scene.transientSpeedRestoreSpeed = 0;
+              this.scene.transientSpeedUntil = 0;
             }
           });
 

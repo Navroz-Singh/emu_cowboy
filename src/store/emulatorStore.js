@@ -5,6 +5,8 @@ export const useEmulatorStore = create((set, get) => ({
   score: 0,
   highScore: 0,
   ammoCount: 6,
+  rabbitsCollected: 0,
+  coinsCollected: 0,
 
   togglePause: () => {
     const nextPaused = !get().isPaused;
@@ -21,5 +23,13 @@ export const useEmulatorStore = create((set, get) => ({
     const nextAmmo = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
     set({ ammoCount: nextAmmo });
   },
-  reset: () => set({ isPaused: false, score: 0, ammoCount: 6 }),
+  setRabbitsCollected: (value) => {
+    const nextValue = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    set({ rabbitsCollected: nextValue });
+  },
+  setCoinsCollected: (value) => {
+    const nextValue = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    set({ coinsCollected: nextValue });
+  },
+  reset: () => set({ isPaused: false, score: 0, ammoCount: 6, rabbitsCollected: 0, coinsCollected: 0 }),
 }));

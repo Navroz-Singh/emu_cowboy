@@ -75,7 +75,7 @@ export class BootScene extends Scene {
       frameWidth: 100,
       frameHeight: 100,
     });
-    this.load.spritesheet("train-kit", `${SPRITES_BASE_PATH}/train_kit.png`, {
+    this.load.spritesheet("train-kit", `${SPRITES_BASE_PATH}/train_kit_rev.png`, {
       frameWidth: 150,
       frameHeight: 300,
     });

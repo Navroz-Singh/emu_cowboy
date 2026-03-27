@@ -98,13 +98,13 @@ export default function DustbowlDevClient() {
     <div className="min-h-dvh bg-black text-(--cabinet-tan)">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4">
         <div className="arcade-border bg-(--screen-bg)/55 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
             <div>
               <p className="text-[10px] md:text-xs text-(--title-red)">TEMPORARY DEV PLAYGROUND</p>
               <h1 className="saloon-title text-xl md:text-2xl">DUSTBOWL DASH — PHASE 7</h1>
               <p className="mt-1 text-[10px] md:text-xs">STATUS: {headerText}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               <button className="pixel-button px-3 py-2 text-[10px] md:text-xs" onClick={handlePauseResume} type="button">
                 {isPaused ? "RESUME" : "PAUSE"}
               </button>
@@ -136,7 +136,7 @@ export default function DustbowlDevClient() {
           ) : null}
         </div>
 
-        <div className="arcade-border relative h-[70vh] min-h-[500px] w-full overflow-hidden bg-(--screen-bg)/65" key={reloadKey}>
+        <div className="arcade-border relative h-[62dvh] min-h-80 w-full overflow-hidden bg-(--screen-bg)/65 md:h-[70vh] md:min-h-125" key={reloadKey}>
           <DynamicGameWrapper gameId={GAME_ID} />
         </div>
 

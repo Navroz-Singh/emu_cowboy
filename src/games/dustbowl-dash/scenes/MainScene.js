@@ -282,6 +282,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   cleanupSceneSystems() {
+    this.playerController?.cleanup?.();
     this.obstacleManager?.cleanup();
     this.enemyManager?.cleanup?.();
     this.ammoRefillManager?.cleanup?.();

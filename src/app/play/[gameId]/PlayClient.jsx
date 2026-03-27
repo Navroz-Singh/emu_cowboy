@@ -27,6 +27,7 @@ export default function PlayClient({ gameId, user }) {
   const [bootMilestoneIndex, setBootMilestoneIndex] = useState(0);
   const [isRevealVisible, setIsRevealVisible] = useState(false);
   const [isRevealExpanded, setIsRevealExpanded] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const hasRunInitialReveal = useRef(false);
 
   const bootMilestones = ["PREPARING CARTRIDGE...", "LOADING ASSETS...", "BOOTING..."];
@@ -49,6 +50,21 @@ export default function PlayClient({ gameId, user }) {
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 915px)");
+    const onViewportChange = (event) => setIsMobileViewport(event.matches);
+
+    setIsMobileViewport(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", onViewportChange);
+      return () => mediaQuery.removeEventListener("change", onViewportChange);
+    }
+
+    mediaQuery.addListener(onViewportChange);
+    return () => mediaQuery.removeListener(onViewportChange);
   }, []);
 
   useEffect(() => {
@@ -133,18 +149,20 @@ export default function PlayClient({ gameId, user }) {
     setHasStartedFromMenu(true);
   };
 
+  const gameZoom = isMobileViewport ? 1.25 : 1;
+
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-(--cabinet-tan)">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-100 flex items-center justify-between p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-100 flex items-center justify-between p-2 md:p-3">
         <button
-          className="pointer-events-auto arcade-border bg-(--cabinet-tan) px-3 py-2 text-[10px] md:text-xs"
+          className="pointer-events-auto arcade-border bg-(--cabinet-tan) px-2.5 py-2 text-[9px] md:px-3 md:text-xs"
           onClick={hasStartedFromMenu ? openExitConfirmation : leaveToHome}
           type="button"
         >
           {hasStartedFromMenu ? "BACK HOME" : "HOME"}
         </button>
         <button
-          className="pointer-events-auto arcade-border bg-(--cabinet-tan) px-3 py-2 text-[10px] md:text-xs"
+          className="pointer-events-auto arcade-border bg-(--cabinet-tan) px-2.5 py-2 text-[9px] md:px-3 md:text-xs"
           onClick={toggleBrowserFullscreen}
           type="button"
         >
@@ -153,8 +171,8 @@ export default function PlayClient({ gameId, user }) {
       </div>
 
       <div className="flex h-full w-full items-center justify-center">
-        <div className="relative h-[90vh] w-[90vw] max-w-400">
-          {hasStartedFromMenu ? <DynamicGameWrapper gameId={gameId} /> : null}
+        <div className="relative h-[78dvh] min-h-80 w-[96vw] max-w-7xl md:h-[90vh] md:w-[90vw]">
+          {hasStartedFromMenu ? <DynamicGameWrapper gameId={gameId} isMobileViewport={isMobileViewport} zoom={gameZoom} /> : null}
           {hasStartedFromMenu && !isBooting ? <SystemOverlay gameId={gameId} gameTitle={cartridge.title} user={user} /> : null}
           {hasStartedFromMenu ? <AuthModal /> : null}
 
@@ -171,7 +189,7 @@ export default function PlayClient({ gameId, user }) {
               <div className="arcade-border w-full max-w-md bg-(--cabinet-tan) p-5 text-center">
                 <h3 className="saloon-title text-2xl text-(--title-red)">{cartridge.title.toUpperCase()}</h3>
                 <p className="mt-3 text-[10px] md:text-xs">READY TO BOOT THIS CARTRIDGE?</p>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <button className="pixel-button flex-1 px-3 py-2 text-[10px] md:text-xs" onClick={startGameFromMenu} type="button">
                     START
                   </button>
@@ -197,7 +215,7 @@ export default function PlayClient({ gameId, user }) {
           <div className="arcade-border w-full max-w-md bg-(--cabinet-tan) p-4 text-center">
             <h3 className="saloon-title text-xl text-(--title-red)">LEAVE GAME?</h3>
             <p className="mt-3 text-[10px] md:text-xs">CURRENT RUN WILL BE INTERRUPTED. CONTINUE?</p>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button className="pixel-button flex-1 px-3 py-2 text-[10px] md:text-xs" onClick={continuePlaying} type="button">
                 CONTINUE
               </button>

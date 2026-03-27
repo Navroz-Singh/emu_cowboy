@@ -214,7 +214,7 @@ export default function CommunityView({ user }) {
                 ))}
               </div>
 
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                 <input
                   className="arcade-border w-full bg-background px-2 py-1"
                   maxLength={1200}
@@ -222,7 +222,7 @@ export default function CommunityView({ user }) {
                   placeholder="Add a comment"
                   value={commentDrafts[post.id] || ""}
                 />
-                <button className="pixel-button px-3 py-1" onClick={() => submitComment(post.id)} type="button">
+                <button className="pixel-button px-3 py-1 sm:whitespace-nowrap" onClick={() => submitComment(post.id)} type="button">
                   COMMENT
                 </button>
               </div>

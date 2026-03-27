@@ -93,7 +93,7 @@ export default function ProfileView({ user, userStat }) {
   return (
     <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[35%_25%_40%]">
       <div className="arcade-border flex flex-col gap-3 bg-(--cabinet-tan)/35 p-3 text-[10px] md:text-xs">
-        <div className="arcade-border relative h-24 w-24 overflow-hidden bg-(--screen-bg)/70">
+        <div className="arcade-border relative h-24 w-24 overflow-hidden bg-background/70">
           <Image alt={user?.name ?? "Guest avatar"} className="object-cover" fill src={user?.image || AVATARS[0]} />
         </div>
         <div className="space-y-2 leading-5">
@@ -105,7 +105,7 @@ export default function ProfileView({ user, userStat }) {
           <div className="space-y-2">
             <p className="text-[9px] md:text-[10px]">SELECT AVATAR</p>
             <div className="relative">
-              <div className="grid grid-cols-5 gap-1">
+              <div className="grid grid-cols-4 gap-1 md:grid-cols-5">
                 {AVATARS.map((avatarSrc) => {
                   const isSelected = avatarSrc === user.image;
 
@@ -155,9 +155,9 @@ export default function ProfileView({ user, userStat }) {
 
       <div className="arcade-border bg-(--cabinet-tan)/35 p-3 text-[10px] md:text-xs">
         <h3 className="mb-3">RECENT ACHIEVEMENTS</h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
           {["PONG MASTER", "DUSTBOWL VETERAN", "FISTFIGHT CHAMPION", "10K SCORE CLUB"].map((label) => (
-            <div key={label} className="arcade-border flex min-h-20 items-end justify-center bg-(--screen-bg)/70 p-2 text-center text-[8px] md:text-[9px]">
+            <div key={label} className="arcade-border flex min-h-20 items-end justify-center bg-background/70 p-2 text-center text-[8px] md:text-[9px]">
               {label}
             </div>
           ))}

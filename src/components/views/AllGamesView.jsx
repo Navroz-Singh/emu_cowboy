@@ -59,7 +59,7 @@ export default function AllGamesView() {
   return (
     <section className="grid h-full grid-cols-1 gap-3 md:grid-cols-[45%_55%]">
       <div className="arcade-border bg-(--cabinet-tan)/40 p-3">
-        <div className="relative mx-auto aspect-square w-full max-w-105">
+        <div className="relative mx-auto aspect-square w-full max-w-85 md:max-w-105">
           <Image
             alt={registryGame?.title || selectedGame.title}
             className="rounded-md border-2 border-(--border-brown)/50 object-cover"
@@ -70,15 +70,15 @@ export default function AllGamesView() {
       </div>
 
       <div className="flex h-full flex-col gap-3">
-        <h2 className="saloon-title text-3xl text-(--title-red) md:text-5xl">
+        <h2 className="saloon-title text-2xl leading-tight text-(--title-red) md:text-5xl">
           {(registryGame?.title || selectedGame.title).toUpperCase()}
         </h2>
-        <p className="text-[10px] leading-6 md:text-xs">
+        <p className="text-[10px] leading-5 md:text-xs md:leading-6">
           {registryGame?.description || selectedGame.shortDescription}
         </p>
         <button
           className={[
-            "pixel-button w-full px-4 py-4 text-xs",
+            "pixel-button w-full px-4 py-3 text-[10px] md:py-4 md:text-xs",
             isLaunching ? "loading-blink" : "",
           ].join(" ")}
           disabled={isLaunching}

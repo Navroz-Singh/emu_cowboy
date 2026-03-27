@@ -65,10 +65,10 @@ export default function LeaderboardsView({ user }) {
       </div>
 
       <div className="arcade-border flex min-h-0 flex-col bg-(--cabinet-tan)/30 p-3">
-        <h2 className="saloon-title mb-3 text-xl text-(--title-red) md:text-3xl">
+        <h2 className="saloon-title mb-3 text-lg leading-tight text-(--title-red) md:text-3xl">
           GLOBAL LEADERBOARDS - {selectedGame.title.toUpperCase()}
         </h2>
-        <div className="mb-3 flex gap-2 text-[9px] md:text-[10px]">
+        <div className="mb-3 flex flex-wrap gap-2 text-[9px] md:text-[10px]">
           <label className="arcade-border flex items-center gap-2 bg-background px-2 py-1">
             <span>REGION:</span>
             <select className="bg-transparent" onChange={(event) => setRegion(event.target.value)} value={region}>
@@ -81,42 +81,46 @@ export default function LeaderboardsView({ user }) {
           </label>
         </div>
 
-        <div className="grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 border-b-2 border-foreground pb-2 text-[9px] md:text-[10px]">
-          <span>RANK</span><span>PLAYER</span><span>SCORE</span><span>DATE</span><span>COUNTRY</span>
-        </div>
-
-        <div className="mt-2 space-y-1 overflow-y-auto overflow-x-hidden pr-1 text-[9px] md:text-[10px]">
-          {isLoading ? <p className="loading-blink px-1 py-1">LOADING...</p> : null}
-          {error ? <p className="px-1 py-1 text-(--title-red)">{error}</p> : null}
-          {rows.map((row) => {
-            const isCurrentUserRow = Boolean(user?.id) && row.userId === user.id;
-            const dateLabel = row.achievedAt ? new Date(row.achievedAt).toISOString().slice(0, 10) : "-";
-
-            return (
-              <div
-                key={`${row.userId}-${row.rank}`}
-                className={[
-                  "grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 rounded px-1 py-1",
-                  isCurrentUserRow ? "bg-(--accent-gold)/25 outline-2 outline-(--accent-gold)" : "",
-                ].join(" ")}
-              >
-                <span>{row.rank}</span>
-                <span>{(row.playerName || "UNKNOWN").toUpperCase()}</span>
-                <span>{row.value}</span>
-                <span>{dateLabel}</span>
-                <span>{row.countryCode || "XX"}</span>
-              </div>
-            );
-          })}
-          {!user && guestHighScore > 0 ? (
-            <div className="grid grid-cols-[10%_30%_20%_20%_20%] gap-x-2 rounded bg-(--accent-gold)/20 px-1 py-1 outline-2 outline-(--accent-gold)">
-              <span>-</span>
-              <span>GUEST</span>
-              <span>{guestHighScore}</span>
-              <span>LOCAL</span>
-              <span>--</span>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="min-w-130">
+            <div className="grid grid-cols-[56px_1fr_92px_100px_84px] gap-x-2 border-b-2 border-foreground pb-2 text-[9px] md:text-[10px]">
+              <span>RANK</span><span>PLAYER</span><span>SCORE</span><span>DATE</span><span>COUNTRY</span>
             </div>
-          ) : null}
+
+            <div className="mt-2 space-y-1 pr-1 text-[9px] md:text-[10px]">
+              {isLoading ? <p className="loading-blink px-1 py-1">LOADING...</p> : null}
+              {error ? <p className="px-1 py-1 text-(--title-red)">{error}</p> : null}
+              {rows.map((row) => {
+                const isCurrentUserRow = Boolean(user?.id) && row.userId === user.id;
+                const dateLabel = row.achievedAt ? new Date(row.achievedAt).toISOString().slice(0, 10) : "-";
+
+                return (
+                  <div
+                    key={`${row.userId}-${row.rank}`}
+                    className={[
+                      "grid grid-cols-[56px_1fr_92px_100px_84px] gap-x-2 rounded px-1 py-1",
+                      isCurrentUserRow ? "bg-(--accent-gold)/25 outline-2 outline-(--accent-gold)" : "",
+                    ].join(" ")}
+                  >
+                    <span>{row.rank}</span>
+                    <span className="truncate">{(row.playerName || "UNKNOWN").toUpperCase()}</span>
+                    <span>{row.value}</span>
+                    <span>{dateLabel}</span>
+                    <span>{row.countryCode || "XX"}</span>
+                  </div>
+                );
+              })}
+              {!user && guestHighScore > 0 ? (
+                <div className="grid grid-cols-[56px_1fr_92px_100px_84px] gap-x-2 rounded bg-(--accent-gold)/20 px-1 py-1 outline-2 outline-(--accent-gold)">
+                  <span>-</span>
+                  <span className="truncate">GUEST</span>
+                  <span>{guestHighScore}</span>
+                  <span>LOCAL</span>
+                  <span>--</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </section>

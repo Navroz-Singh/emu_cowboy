@@ -11,23 +11,59 @@ export class PlayerController {
     this.jumpChainCount = 0;
     this.activeJumpTween = null;
     this.activeShadowJumpTween = null;
+    this.touchStartX = 0;
+    this.touchStartY = 0;
+    this.touchStartTime = 0;
+    this.lastTapTime = 0;
+    this.pendingTapShotEvent = null;
+    this.touchEnabled = false;
+
+    this.gestureThresholds = {
+      swipeMinDistance: 38,
+      swipeAxisBias: 1.2,
+      tapMaxDistance: 16,
+      tapMaxDurationMs: 260,
+      doubleTapWindowMs: 250,
+    };
+
+    this.handlePointerDown = this.handlePointerDown.bind(this);
+    this.handlePointerUp = this.handlePointerUp.bind(this);
   }
 
   initKeyboard() {
-    if (!this.scene.input?.keyboard) return;
+    if (this.scene.input?.keyboard) {
+      this.scene.cursors = this.scene.input.keyboard.createCursorKeys();
+      this.scene.keys = this.scene.input.keyboard.addKeys({
+        leftA: Phaser.Input.Keyboard.KeyCodes.A,
+        rightD: Phaser.Input.Keyboard.KeyCodes.D,
+        jumpSpace: Phaser.Input.Keyboard.KeyCodes.SPACE,
+        lassoE: Phaser.Input.Keyboard.KeyCodes.E,
+        shootF: Phaser.Input.Keyboard.KeyCodes.F,
+      });
+    }
 
-    this.scene.cursors = this.scene.input.keyboard.createCursorKeys();
-    this.scene.keys = this.scene.input.keyboard.addKeys({
-      leftA: Phaser.Input.Keyboard.KeyCodes.A,
-      rightD: Phaser.Input.Keyboard.KeyCodes.D,
-      jumpSpace: Phaser.Input.Keyboard.KeyCodes.SPACE,
-      lassoE: Phaser.Input.Keyboard.KeyCodes.E,
-      shootF: Phaser.Input.Keyboard.KeyCodes.F,
-    });
+    this.initTouchControls();
+  }
+
+  initTouchControls() {
+    if (!this.scene.input) return;
+
+    const hasTouchDevice = Boolean(this.scene.sys?.game?.device?.input?.touch);
+    let hasCoarsePointer = false;
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    }
+
+    this.touchEnabled = hasTouchDevice || hasCoarsePointer;
+    if (!this.touchEnabled) return;
+
+    this.scene.input.on("pointerdown", this.handlePointerDown);
+    this.scene.input.on("pointerup", this.handlePointerUp);
   }
 
   processInput() {
-    if (this.scene.isGameOver || !this.scene.keys || !this.scene.cursors) return;
+    if (this.scene.isGameOver) return;
+    if (!this.scene.keys || !this.scene.cursors) return;
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.leftA) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.left)) {
       this.handleLaneSwitchInput(-1);
@@ -38,22 +74,7 @@ export class PlayerController {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.jumpSpace) || Phaser.Input.Keyboard.JustDown(this.scene.cursors.up)) {
-      if (this.scene.trainHeistManager?.isHeistActive && this.scene.cowboyOnTrain) {
-        this.scene.trainHeistManager?.tryReturnToHorse?.();
-        return;
-      }
-
-      const canJumpNow = this.scene.actionState === ACTION_STATE.IDLE || (this.scene.isJumpInProgress && this.jumpChainCount < 2);
-      if (canJumpNow) {
-        if (this.scene.trainHeistManager?.isHeistActive) {
-          if (this.scene.actionState === ACTION_STATE.IDLE) {
-            this.scene.trainHeistManager?.tryLeapToTrain?.();
-            return;
-          }
-        }
-
-        this.jump();
-      }
+      this.handleJumpInput();
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.scene.keys.shootF)) {
@@ -67,6 +88,114 @@ export class PlayerController {
         this.throwLasso();
       }
     }
+  }
+
+  handleJumpInput() {
+    if (this.scene.trainHeistManager?.isHeistActive && this.scene.cowboyOnTrain) {
+      this.scene.trainHeistManager?.tryReturnToHorse?.();
+      return;
+    }
+
+    const canJumpNow = this.scene.actionState === ACTION_STATE.IDLE || (this.scene.isJumpInProgress && this.jumpChainCount < 2);
+    if (!canJumpNow) return;
+
+    if (this.scene.trainHeistManager?.isHeistActive) {
+      if (this.scene.actionState === ACTION_STATE.IDLE) {
+        this.scene.trainHeistManager?.tryLeapToTrain?.();
+        return;
+      }
+    }
+
+    this.jump();
+  }
+
+  handlePointerDown(pointer) {
+    if (!this.touchEnabled || this.scene.isGameOver) return;
+    if (!pointer) return;
+
+    this.touchStartX = Number(pointer.worldX ?? pointer.x ?? 0);
+    this.touchStartY = Number(pointer.worldY ?? pointer.y ?? 0);
+    this.touchStartTime = this.scene.time.now;
+  }
+
+  handlePointerUp(pointer) {
+    if (!this.touchEnabled || this.scene.isGameOver || this.scene.hasDied) return;
+    if (!pointer) return;
+
+    const endX = Number(pointer.worldX ?? pointer.x ?? 0);
+    const endY = Number(pointer.worldY ?? pointer.y ?? 0);
+    const dx = endX - this.touchStartX;
+    const dy = endY - this.touchStartY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const elapsedMs = Math.max(0, this.scene.time.now - this.touchStartTime);
+    const { swipeMinDistance, swipeAxisBias, tapMaxDistance, tapMaxDurationMs } = this.gestureThresholds;
+
+    if (absX >= swipeMinDistance && absX > absY * swipeAxisBias) {
+      this.cancelPendingTapShot();
+      this.handleLaneSwitchInput(dx > 0 ? 1 : -1);
+      return;
+    }
+
+    if (dy <= -swipeMinDistance && absY > absX * swipeAxisBias) {
+      this.cancelPendingTapShot();
+      this.handleJumpInput();
+      return;
+    }
+
+    if (absX <= tapMaxDistance && absY <= tapMaxDistance && elapsedMs <= tapMaxDurationMs) {
+      this.handleTapAction();
+    }
+  }
+
+  handleTapAction() {
+    const hasActiveRabbit = Boolean(this.scene.spawnerSystem?.hasActiveRabbit?.());
+    const now = this.scene.time.now;
+    const withinDoubleTapWindow = (now - this.lastTapTime) <= this.gestureThresholds.doubleTapWindowMs;
+
+    if (hasActiveRabbit && withinDoubleTapWindow) {
+      this.cancelPendingTapShot();
+      if (this.canUseActionWhileMoving() && !this.scene.cowboyOnTrain) {
+        this.throwLasso();
+      }
+      this.lastTapTime = 0;
+      return;
+    }
+
+    this.lastTapTime = now;
+
+    if (!hasActiveRabbit) {
+      if (this.canUseActionWhileMoving() && !this.scene.cowboyOnTrain) {
+        this.quickDraw();
+      }
+      return;
+    }
+
+    this.cancelPendingTapShot();
+    this.pendingTapShotEvent = this.scene.time.delayedCall(this.gestureThresholds.doubleTapWindowMs, () => {
+      this.pendingTapShotEvent = null;
+      if (this.scene.hasDied || this.scene.isGameOver) return;
+      if (this.canUseActionWhileMoving() && !this.scene.cowboyOnTrain) {
+        this.quickDraw();
+      }
+    });
+  }
+
+  cancelPendingTapShot() {
+    if (!this.pendingTapShotEvent) return;
+    this.pendingTapShotEvent.remove(false);
+    this.pendingTapShotEvent = null;
+  }
+
+  cleanup() {
+    this.cancelPendingTapShot();
+
+    if (this.scene.input) {
+      this.scene.input.off("pointerdown", this.handlePointerDown);
+      this.scene.input.off("pointerup", this.handlePointerUp);
+    }
+
+    this.touchEnabled = false;
   }
 
   canUseActionWhileMoving() {

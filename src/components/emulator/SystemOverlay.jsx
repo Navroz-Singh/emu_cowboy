@@ -164,7 +164,7 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-20">
-        <div className="flex items-start justify-between p-3 text-[10px] md:text-xs">
+        <div className="flex items-start justify-between gap-2 p-2 text-[9px] md:p-3 md:text-xs">
           <div className="arcade-border bg-(--cabinet-tan)/90 px-2 py-2">
             <p>{gameTitle.toUpperCase()}</p>
             <p className="mt-1">SCORE: {formattedScore}</p>
@@ -174,7 +174,7 @@ export default function SystemOverlay({ gameId, gameTitle, user }) {
             <p>COINS: {coinsCollected}</p>
           </div>
 
-          <div className="pointer-events-auto flex items-center gap-2">
+          <div className="pointer-events-auto flex flex-col items-end gap-2 md:flex-row md:items-center">
             {saveStatus ? (
               <div className="arcade-border bg-(--cabinet-tan)/90 px-2 py-1 text-[9px] md:text-[10px]">
                 {saveStatus === "saving" ? "SAVING" : saveStatus === "saved" ? "SAVED" : "SAVE FAILED"}

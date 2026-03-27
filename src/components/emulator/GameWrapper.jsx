@@ -5,10 +5,11 @@ import { AUTO, Game, Scale } from "phaser";
 
 import { GAME_REGISTRY } from "@/games/registry";
 
-export default function GameWrapper({ gameId, width = 800, height = 600 }) {
+export default function GameWrapper({ gameId, width = 800, height = 600, zoom = 1, isMobileViewport = false }) {
   const containerRef = useRef(null);
   const gameRef = useRef(null);
   const [error, setError] = useState("");
+  const horizontalTranslate = isMobileViewport ? "-45%" : "-50%";
 
   useEffect(() => {
     let isMounted = true;
@@ -64,7 +65,14 @@ export default function GameWrapper({ gameId, width = 800, height = 600 }) {
           {error}
         </div>
       ) : null}
-      <div className="h-full w-full" ref={containerRef} />
+      <div
+        className="absolute left-1/2 top-1/2 h-full w-full"
+        ref={containerRef}
+        style={{
+          transform: `translate(${horizontalTranslate}, -50%) scale(${zoom})`,
+          transformOrigin: "center center",
+        }}
+      />
     </div>
   );
 }

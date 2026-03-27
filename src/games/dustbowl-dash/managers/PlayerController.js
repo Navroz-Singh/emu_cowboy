@@ -14,6 +14,8 @@ export class PlayerController {
     this.touchStartX = 0;
     this.touchStartY = 0;
     this.touchStartTime = 0;
+    this.activeTouchPointerId = null;
+    this.gestureResolved = false;
     this.lastTapTime = 0;
     this.pendingTapShotEvent = null;
     this.touchEnabled = false;
@@ -27,6 +29,7 @@ export class PlayerController {
     };
 
     this.handlePointerDown = this.handlePointerDown.bind(this);
+    this.handlePointerMove = this.handlePointerMove.bind(this);
     this.handlePointerUp = this.handlePointerUp.bind(this);
   }
 
@@ -58,6 +61,7 @@ export class PlayerController {
     if (!this.touchEnabled) return;
 
     this.scene.input.on("pointerdown", this.handlePointerDown);
+    this.scene.input.on("pointermove", this.handlePointerMove);
     this.scene.input.on("pointerup", this.handlePointerUp);
   }
 
@@ -112,15 +116,55 @@ export class PlayerController {
   handlePointerDown(pointer) {
     if (!this.touchEnabled || this.scene.isGameOver) return;
     if (!pointer) return;
+    if (this.activeTouchPointerId !== null) return;
 
+    this.activeTouchPointerId = pointer.id;
     this.touchStartX = Number(pointer.worldX ?? pointer.x ?? 0);
     this.touchStartY = Number(pointer.worldY ?? pointer.y ?? 0);
     this.touchStartTime = this.scene.time.now;
+    this.gestureResolved = false;
+  }
+
+  handlePointerMove(pointer) {
+    if (!this.touchEnabled || this.scene.isGameOver || this.scene.hasDied) return;
+    if (!pointer) return;
+    if (this.activeTouchPointerId !== pointer.id) return;
+    if (this.gestureResolved) return;
+
+    const currentX = Number(pointer.worldX ?? pointer.x ?? 0);
+    const currentY = Number(pointer.worldY ?? pointer.y ?? 0);
+    const dx = currentX - this.touchStartX;
+    const dy = currentY - this.touchStartY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const { swipeMinDistance, swipeAxisBias } = this.gestureThresholds;
+
+    if (absX >= swipeMinDistance && absX > absY * swipeAxisBias) {
+      this.cancelPendingTapShot();
+      this.handleLaneSwitchInput(dx > 0 ? 1 : -1);
+      this.gestureResolved = true;
+      return;
+    }
+
+    if (dy <= -swipeMinDistance && absY > absX * swipeAxisBias) {
+      this.cancelPendingTapShot();
+      this.handleJumpInput();
+      this.gestureResolved = true;
+    }
   }
 
   handlePointerUp(pointer) {
     if (!this.touchEnabled || this.scene.isGameOver || this.scene.hasDied) return;
     if (!pointer) return;
+    if (this.activeTouchPointerId !== pointer.id) return;
+
+    const endedWithResolvedGesture = this.gestureResolved;
+    this.activeTouchPointerId = null;
+    this.gestureResolved = false;
+
+    if (endedWithResolvedGesture) {
+      return;
+    }
 
     const endX = Number(pointer.worldX ?? pointer.x ?? 0);
     const endY = Number(pointer.worldY ?? pointer.y ?? 0);
@@ -192,10 +236,13 @@ export class PlayerController {
 
     if (this.scene.input) {
       this.scene.input.off("pointerdown", this.handlePointerDown);
+      this.scene.input.off("pointermove", this.handlePointerMove);
       this.scene.input.off("pointerup", this.handlePointerUp);
     }
 
     this.touchEnabled = false;
+    this.activeTouchPointerId = null;
+    this.gestureResolved = false;
   }
 
   canUseActionWhileMoving() {

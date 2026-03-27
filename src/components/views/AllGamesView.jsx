@@ -87,6 +87,13 @@ export default function AllGamesView() {
         >
           {isLaunching ? launchMilestones[launchMilestoneIndex] : "START / INSERT COIN"}
         </button>
+        <button
+          className="arcade-border w-full bg-background px-4 py-3 text-[10px] md:text-xs"
+          onClick={() => router.push(`/how-to/${selectedGameId}`)}
+          type="button"
+        >
+          HOW TO PLAY
+        </button>
         <div className="arcade-border mt-auto bg-(--cabinet-tan)/40 p-3 text-[10px] md:text-xs">
           <p className="mb-2">GLOBAL LEADERS</p>
           {isLeadersLoading ? <p className="loading-blink">LOADING...</p> : null}

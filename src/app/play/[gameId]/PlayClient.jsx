@@ -193,6 +193,13 @@ export default function PlayClient({ gameId, user }) {
                   <button className="pixel-button flex-1 px-3 py-2 text-[10px] md:text-xs" onClick={startGameFromMenu} type="button">
                     START
                   </button>
+                  <button
+                    className="arcade-border flex-1 bg-background px-3 py-2 text-[10px] md:text-xs"
+                    onClick={() => router.push(`/how-to/${gameId}`)}
+                    type="button"
+                  >
+                    HOW TO PLAY
+                  </button>
                   <button className="arcade-border flex-1 bg-background px-3 py-2 text-[10px] md:text-xs" onClick={leaveToHome} type="button">
                     GO BACK HOME
                   </button>
